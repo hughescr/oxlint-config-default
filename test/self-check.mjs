@@ -91,7 +91,7 @@ function checkSonarContract() {
     }
     for (const name of testOn) { assert.ok(!baseOn.has(name) || both.includes(name)); }
     // Opt-in groups: sizes, disjointness from the core and from each other, and existence in the plugin.
-    const sizes = { sonarjsAws: 17, sonarjsWeb: 28, sonarjsFrameworks: 16, sonarjsTestTooling: 14, sonarjsStyle: 24 };
+    const sizes = { sonarjsAws: 17, sonarjsWeb: 28, sonarjsFrameworks: 16, sonarjsTestTooling: 14, sonarjsStyle: 25 };
     const seen = new Map([...core].map(name => [name, 'sonarjs']));
     for (const [group, size] of Object.entries(sizes)) {
         const names = blockNames(sonarBlocks[group]);
@@ -104,7 +104,7 @@ function checkSonarContract() {
     }
     for (const name of core) { assert.ok(pluginRules.has(name), `core: ${name} is not a rule of the installed plugin`); }
     // Dropped rules: covered duplicates, not-covered, silent typed-only, ast-grep. None overlaps an enabled rule or another list.
-    assert.equal(Object.keys(data.sonarjsCovered).length, 38 + 3 + 13, 'covered table: 38 duplicates + 3 enabled built-ins + 13 previously enabled regexp/native duplicates');
+    assert.equal(Object.keys(data.sonarjsCovered).length, 38 + 2 + 13, 'covered table: 38 duplicates + 2 enabled built-ins + 13 previously enabled regexp/native duplicates');
     assert.equal(data.sonarjsAstGrep.length, 5);
     assert.equal(data.sonarjsSilent.length, 27);
     assert.deepEqual(Object.keys(data.sonarjsNotCovered).toSorted(), ['label-position', 'no-duplicate-test-title', 'no-empty-test-title', 'no-labels', 'no-redundant-boolean', 'synchronous-suite-callback']);
@@ -136,6 +136,8 @@ function checkSonarContract() {
     }
     // Every "covered by" id must be a rule that is actually enabled by the default (or by bunTest, or an explicit compiler check).
     const enabledByDefault = new Set([pkg.default.rules, ...pkg.default.overrides.map(override => override.rules ?? {})].flatMap(map => Object.entries(map).filter(([, value]) => isOn(value)).map(([key]) => key)));
+    assert.ok(!enabledByDefault.has('no-control-regex'), 'the stricter built-in is not enabled by default');
+    assert.ok(blockNames(pkg.sonarjsStyle).has('no-control-regex'), 'SonarJS control regex checking is opt-in style');
     const enabledByBunTest = new Set(Object.keys(Object.assign({}, ...pkg.bunTest.overrides.map(override => override.rules))));
     for (const [name, covers] of Object.entries(data.sonarjsCovered)) {
         assert.ok(covers.length > 0, name);
@@ -244,6 +246,8 @@ beforeAll(() => {});\n`);
     assert.ok(codesIn('scoped.test.ts').includes('sonarjs(hashing)'), 'the four shared sonarjs rules also run on test files');
     for (const code of ['sonarjs(no-hardcoded-ip)', 'sonarjs(pseudo-random)']) { assert.ok(!codesIn('scoped.test.ts').includes(code), `${code} must not run on test files`); }
     assert.ok(!codesIn('bad.ts').includes('sonarjs(no-trivial-assertions)'), 'test-semantic sonarjs rules do not run on non-test files');
+    assert.ok(!codesIn('bad.ts').includes('eslint(no-control-regex)'), 'intentional control-character regexes are allowed by default');
+    assert.ok(!codesIn('bad.ts').includes('sonarjs(no-control-regex)'), 'SonarJS control regex checking is opt-in');
     // `process` in a .mjs file: env reaches the config through the default's override, with no consumer env copy.
     assert.ok(!codesIn('env.mjs').includes('eslint(no-undef)'), 'node globals must not be reported as undefined');
     for(const code of [
@@ -251,7 +255,7 @@ beforeAll(() => {});\n`);
         'typescript(no-deprecated)', 'typescript(require-array-sort-compare)',
         'unicorn(no-process-exit)', 'unicorn-js(no-for-loop)',
         'import(no-duplicates)', 'import-x-js(order)', 'node(no-sync)', 'n-js(no-process-exit)',
-        'promise(always-return)', 'eslint-core(require-atomic-updates)', 'eslint(no-new)', 'eslint(no-control-regex)', 'oxc(missing-throw)',
+        'promise(always-return)', 'eslint-core(require-atomic-updates)', 'eslint(no-new)', 'oxc(missing-throw)',
         'sonarjs(no-identical-expressions)', 'sonarjs(no-hardcoded-ip)', 'sonarjs(pseudo-random)',
         'regexp(no-dupe-characters-character-class)', '@stylistic(quotes)',
         '@hughescr/test-hygiene(require-fake-timers-cleanup)', '@hughescr/module-boundaries(no-internal-in-barrel)',
@@ -309,6 +313,7 @@ export default { categories: { correctness: 'off' }, extends: [sonarjs] };\n`);
         ['sonarjsFrameworks', 'frameworks.jsx', 'export const grid = () => <table><tr><td>1</td></tr></table>;\n', 'sonarjs(table-header)'],
         ['sonarjsTestTooling', 'cypress.test.js', "describe('x', function () { it('y', function () { cy.get('x').debug(); cy.wait(500); }); });\n", 'sonarjs(no-fixed-wait-in-tests)'],
         ['sonarjsStyle', 'style.ts', 'export function f(x: number) { const y = x * 2; return y; }\n', 'sonarjs(prefer-immediate-return)'],
+        ['sonarjsStyle', 'control.ts', 'export const control = /\\x01/;\n', 'sonarjs(no-control-regex)'],
     ];
     for (const [name, file, text, code] of optIns) {
         put(file, text);

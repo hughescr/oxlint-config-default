@@ -106,15 +106,15 @@ export default defineConfig({ ...root, extends: [config, sonarjsAws, sonarjsWeb]
 | `sonarjsWeb` | 28 | cookie, header, CORS/CSRF/session and HTTP-library rules, plus general injection and secret security: `content-security-policy cookie-no-httponly cors csrf file-uploads insecure-cookie insecure-jwt-token no-mime-sniff no-referrer-policy no-session-cookies-on-static-assets session-regeneration strict-transport-security x-powered-by xml-parser-xxe hardcoded-secret-signatures production-debug review-blockchain-mnemonic os-command sql-queries disabled-auto-escaping dompurify-unsafe-config hidden-files no-mixed-content frame-ancestors confidential-information-logging no-ip-forward content-length no-intrusive-permissions` |
 | `sonarjsFrameworks` | 16 | React, Vue, Angular, jQuery, axios, HTML and JSX: `link-with-target-blank no-angular-bypass-sanitization no-debounce-throttle-in-render no-hook-setter-in-body no-mutate-reactive-state-in-updated-hook no-useless-react-setstate no-uniq-key no-vue-class-component no-vue-mixins prefer-native-axios-alternative prefer-native-jquery-alternative table-header table-header-reference no-table-as-layout object-alt-content dynamically-constructed-templates` |
 | `sonarjsTestTooling` | 14 | chai, cypress, mocha, testing-library, vitest and other test-tool rules, on test files only: `chai-determinate-assertion disabled-timeout no-debug-commands-in-ui-tests no-fixed-wait-in-tests no-forced-browser-interaction no-interpolation-in-inline-snapshots no-same-argument-assert prefer-cypress-should testing-library-prefer-query-by-disappearance testing-library-query-assertion vitest-mock-at-module-scope assertions-in-tests no-incompatible-assertion-types synchronous-exception-assertions` |
-| `sonarjsStyle` | 24 | the 21 low-value style rules with the shared ESLint options (`no-nested-functions` threshold 5, `class-name`, `max-switch-cases` 30, `prefer-immediate-return` as a warning; `prefer-specific-assertions stable-tests test-check-exception` on test files only) plus `no-commented-code arguments-order no-redundant-optional` |
+| `sonarjsStyle` | 25 | the 21 low-value style rules with the shared ESLint options (`no-nested-functions` threshold 5, `class-name`, `max-switch-cases` 30, `prefer-immediate-return` as a warning; `prefer-specific-assertions stable-tests test-check-exception` on test files only) plus `no-commented-code arguments-order no-redundant-optional no-control-regex` |
 
-Ambiguous placements: `dynamically-constructed-templates` and `link-with-target-blank` are in Frameworks (template and HTML rules); `disabled-timeout` (mocha) and the three rules that lose their typed behaviour without types (`assertions-in-tests`, `no-incompatible-assertion-types`, `synchronous-exception-assertions`) are in TestTooling; `os-command`, `sql-queries`, `xml-parser-xxe`, `hardcoded-secret-signatures`, `review-blockchain-mnemonic`, `production-debug`, `file-uploads`, `disabled-auto-escaping` and `dompurify-unsafe-config` are in Web; `no-commented-code`, `arguments-order` (weak without types), and `no-redundant-optional` are catch-alls in Style.
+Ambiguous placements: `dynamically-constructed-templates` and `link-with-target-blank` are in Frameworks (template and HTML rules); `disabled-timeout` (mocha) and the three rules that lose their typed behaviour without types (`assertions-in-tests`, `no-incompatible-assertion-types`, `synchronous-exception-assertions`) are in TestTooling; `os-command`, `sql-queries`, `xml-parser-xxe`, `hardcoded-secret-signatures`, `review-blockchain-mnemonic`, `production-debug`, `file-uploads`, `disabled-auto-escaping` and `dompurify-unsafe-config` are in Web; `no-commented-code`, `arguments-order` (weak without types), `no-redundant-optional`, and `no-control-regex` are catch-alls in Style. The built-in `no-control-regex` is deliberately off, matching the shared ESLint config: it is stricter than the SonarJS rule, notably for intentional control-character sanitiser ranges, so it is not equivalent coverage.
 
 **Reliability wrapper.** Oxlint 1.94.0 gives every linted file the same `context.sourceCode` object, and eslint-plugin-sonarjs 4.2.2 caches per-file import data keyed by that object's identity and never clears it. Rules gated on "is a test framework imported" therefore go silent depending on which file is linted first, differently from run to run with threads (stock plugin: wrong in 4 of 6 runs). `plugins/sonarjs-oxlint.mjs` clears the plugin's own per-file cache once per file; with it 6 of 6 runs are correct. The wrapper reaches into the plugin's internal `helpers/module.js`, so **`eslint-plugin-sonarjs` is pinned to an exact version** in `dependencies`; re-verify the self-check's repeat-run test before bumping it. The mechanism is isolated in one function so it can be replaced without touching the rule data.
 
 #### What covers each dropped SonarJS rule
 
-The 38 SonarJS rules that duplicate an enabled rule, three that duplicate built-ins the default now enables for the purpose (`no-new`, `oxc/missing-throw`, `no-control-regex`), and 13 more that earlier versions of this package enabled are not in any default or opt-in group. A self-check verifies every listed covering rule is actually enabled by the default (or by `bunTest`).
+The 38 SonarJS rules that duplicate an enabled rule, two that duplicate built-ins the default enables for the purpose (`no-new`, `oxc/missing-throw`), and 13 more that earlier versions of this package enabled are not in any default or opt-in group. A self-check verifies every listed covering rule is actually enabled by the default (or by `bunTest`).
 
 | SonarJS rule | Covered by |
 | --- | --- |
@@ -158,7 +158,6 @@ The 38 SonarJS rules that duplicate an enabled rule, three that duplicate built-
 | `sonarjs/updated-const-var` | `no-const-assign` |
 | `sonarjs/constructor-for-side-effects` | `no-new` (enabled in the default for this) |
 | `sonarjs/no-unthrown-error` | `oxc/missing-throw` (enabled in the default for this) |
-| `sonarjs/no-control-regex` | `no-control-regex` (enabled in the default for this) |
 | `sonarjs/unused-import` | `no-unused-vars` |
 | `sonarjs/bitwise-operators` | `no-bitwise` |
 | `sonarjs/no-empty-character-class` | `regexp/no-empty-character-class` |
@@ -245,7 +244,7 @@ The port uses the effective rule ids and options from the shared ESLint config i
 
 | Source | JavaScript | TypeScript |
 | --- | ---: | ---: |
-| Native core (including TS extension equivalents, `no-new`, `oxc/missing-throw`, `no-control-regex`) | 110 | 96 |
+| Native core (including TS extension equivalents, `no-new`, `oxc/missing-throw`) | 109 | 95 |
 | Native typescript | 0 | 68 |
 | Native unicorn / unicorn-js | 124 / 8 | 124 / 8 |
 | Native import / import-x-js | 7 / 3 | 7 / 3 |
@@ -258,7 +257,7 @@ The port uses the effective rule ids and options from the shared ESLint config i
 | eslint-comments wrapper | 6 | 6 |
 | test-hygiene | 4 | 4 |
 | module-boundaries wrapper | 2 | 2 |
-| **Total active rules (ordinary source files)** | **458** | **511** |
+| **Total active rules (ordinary source files)** | **457** | **510** |
 
 Test overrides disable 15 rules for TS tests and swap the sonarjs core for its 13 test-file rules; shared JS test relaxations are also applied. Optional lodash adds 23 rules; optional bunTest adds 11; the sonarjs opt-in groups add 17, 28, 16, 14 and 25.
 

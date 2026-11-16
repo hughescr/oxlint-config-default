@@ -15,7 +15,7 @@ export const core = {
         no-useless-assignment no-useless-catch no-with require-yield no-nested-ternary block-scoped-var
         default-param-last no-loop-func no-self-compare no-unmodified-loop-condition no-useless-call
         no-useless-concat no-template-curly-in-string no-new-wrappers no-throw-literal
-        no-new oxc/missing-throw no-control-regex`),
+        no-new oxc/missing-throw`),
     ...warnings(`default-case-last no-constructor-return no-var prefer-object-spread no-await-in-loop
         symbol-description prefer-template prefer-exponentiation-operator logical-assignment-operators
         prefer-object-has-own no-useless-constructor no-useless-return object-shorthand`),
@@ -348,7 +348,7 @@ export const sonarjsStyle = {
         ...sonar(`no-default-utility-imports no-inverted-boolean-check no-nested-assignment no-nested-template-literals
             no-same-line-conditional no-small-switch prefer-native-lodash-alternative prefer-promise-shorthand
             prefer-single-boolean-return prefer-type-guard prefer-while public-static-readonly updated-loop-counter
-            use-type-alias no-commented-code arguments-order no-redundant-optional`),
+            use-type-alias no-commented-code arguments-order no-redundant-optional no-control-regex`),
         'sonarjs/class-name': ['error', { format: '^\\$?[A-Z][a-zA-Z0-9]*$' }],
         'sonarjs/max-switch-cases': ['error', 30],
         'sonarjs/no-nested-functions': ['error', { threshold: 5 }],
@@ -398,10 +398,9 @@ export const sonarjsCovered = {
     'super-linear-regex': ['regexp/no-super-linear-backtracking', 'regexp/no-super-linear-move'],
     'todo-tag': ['no-warning-comments'],
     'updated-const-var': ['no-const-assign'],
-    // Duplicates of built-ins that the default enables for exactly this purpose (no-new, oxc/missing-throw, no-control-regex).
+    // Duplicates of built-ins that the default enables for exactly this purpose (no-new, oxc/missing-throw).
     'constructor-for-side-effects': ['no-new'],
     'no-unthrown-error': ['oxc/missing-throw'],
-    'no-control-regex': ['no-control-regex'],
     // Previously enabled here; covered by the regexp plugin, native rules or the compiler.
     'unused-import': ['no-unused-vars'],
     'bitwise-operators': ['no-bitwise'],
