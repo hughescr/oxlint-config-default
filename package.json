@@ -1,0 +1,33 @@
+{
+  "name": "@hughescr/oxlint-config-default",
+  "version": "0.0.0",
+  "description": "Default base config for Oxlint (rule-set skeleton)",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/hughescr/oxlint-config-default.git"
+  },
+  "license": "BSD-3-Clause",
+  "author": "Craig Hughes <craig.npm@rungie.com>",
+  "type": "module",
+  "exports": "./index.mjs",
+  "files": [
+    "index.mjs"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "bun test/self-check.mjs",
+    "lint": "oxlint -c oxlint.config.ts index.mjs test/self-check.mjs",
+    "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge main"
+  },
+  "peerDependencies": {
+    "oxlint": ">=1.94.0",
+    "tsrs": "*"
+  },
+  "devDependencies": {
+    "oxlint": "1.94.0",
+    "tsrs": "0.25.0-ts7.1.0-beta"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
