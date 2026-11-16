@@ -31,7 +31,7 @@ Run Oxlint under **Node**, including subprocesses in tests: `node node_modules/o
 - Do not add a duplicate of an enabled rule to the core; add it to `sonarjsCovered` instead.
 - Inherited through `extends` in Oxlint 1.94.0: `rules`, `overrides` (including `env`/`globals` set inside an override), `plugins`, `jsPlugins`, `categories`, and `options` field by field (`typeAware`, `reportUnusedDisableDirectives`, `maxWarnings`, with the consumer's value winning). **Not** inherited: root `env`, `globals`, `ignorePatterns` and `settings`. The default therefore ships `env` in an override, and `root` (`env` plus base `settings`) is for the consumer root. Bun/Jest consumers must set root `settings: { ...root.settings, ...bunTest.settings }`; module-boundaries settings are likewise consumer-root settings. Type programs come from each file's nearest tsconfig; engine installation/discovery is consumer-owned. The self-check's probe package pins this table.
 - Shared JS/TS/test overrides match against the consumer's config location; self-checks must keep testing that boundary.
-- This package does not set `reportUnusedDisableDirectives`: consumers set it or pass `--report-unused-disable-directives-severity warn`. Consumers must pass `--deny-warnings` for a lint gate.
+- The default sets `options.reportUnusedDisableDirectives: 'warn'` (inherited; a consumer's own value wins). Consumers must pass `--deny-warnings` for a lint gate.
 - The comments adapter needs the bundled ast-grep rules to cover self-suppressed bare directives and missing descriptions. Preserve JS, TS, and TSX variants.
 - No `no-restricted-syntax` core-wrapper rules: consumer syntax bans belong in ast-grep.
 - Keep package.json linting on the existing ESLint shared config, not Oxlint.

@@ -91,7 +91,7 @@ function checkSonarContract() {
     }
     for (const name of testOn) { assert.ok(!baseOn.has(name) || both.includes(name)); }
     // Opt-in groups: sizes, disjointness from the core and from each other, and existence in the plugin.
-    const sizes = { sonarjsAws: 17, sonarjsWeb: 28, sonarjsFrameworks: 16, sonarjsTestTooling: 14, sonarjsStyle: 25 };
+    const sizes = { sonarjsAws: 17, sonarjsWeb: 28, sonarjsFrameworks: 16, sonarjsTestTooling: 14, sonarjsStyle: 24 };
     const seen = new Map([...core].map(name => [name, 'sonarjs']));
     for (const [group, size] of Object.entries(sizes)) {
         const names = blockNames(sonarBlocks[group]);
@@ -104,7 +104,7 @@ function checkSonarContract() {
     }
     for (const name of core) { assert.ok(pluginRules.has(name), `core: ${name} is not a rule of the installed plugin`); }
     // Dropped rules: covered duplicates, not-covered, silent typed-only, ast-grep. None overlaps an enabled rule or another list.
-    assert.equal(Object.keys(data.sonarjsCovered).length, 38 + 2 + 13, 'covered table: 38 duplicates + 2 enabled built-ins + 13 previously enabled regexp/native duplicates');
+    assert.equal(Object.keys(data.sonarjsCovered).length, 38 + 3 + 13, 'covered table: 38 duplicates + 3 enabled built-ins + 13 previously enabled regexp/native duplicates');
     assert.equal(data.sonarjsAstGrep.length, 5);
     assert.equal(data.sonarjsSilent.length, 27);
     assert.deepEqual(Object.keys(data.sonarjsNotCovered).toSorted(), ['label-position', 'no-duplicate-test-title', 'no-empty-test-title', 'no-labels', 'no-redundant-boolean', 'synchronous-suite-callback']);
@@ -217,6 +217,7 @@ export const sameSides = (n: number) => n % 2 === n % 2;
 export const address = '8.8.8.8';
 export const random = Math.random();
 export function neverThrown() { new Error('not thrown'); }
+export const controlCharacter = /\\x00/;
 `);
     put('dep.ts', 'export const value = 1;\n');
     // bun:test files: test-semantic sonarjs rules apply here; general defect/security rules do not, except the four shared ones.
@@ -250,7 +251,7 @@ beforeAll(() => {});\n`);
         'typescript(no-deprecated)', 'typescript(require-array-sort-compare)',
         'unicorn(no-process-exit)', 'unicorn-js(no-for-loop)',
         'import(no-duplicates)', 'import-x-js(order)', 'node(no-sync)', 'n-js(no-process-exit)',
-        'promise(always-return)', 'eslint-core(require-atomic-updates)', 'eslint(no-new)', 'oxc(missing-throw)',
+        'promise(always-return)', 'eslint-core(require-atomic-updates)', 'eslint(no-new)', 'eslint(no-control-regex)', 'oxc(missing-throw)',
         'sonarjs(no-identical-expressions)', 'sonarjs(no-hardcoded-ip)', 'sonarjs(pseudo-random)',
         'regexp(no-dupe-characters-character-class)', '@stylistic(quotes)',
         '@hughescr/test-hygiene(require-fake-timers-cleanup)', '@hughescr/module-boundaries(no-internal-in-barrel)',
@@ -281,10 +282,15 @@ export default { extends: [config] };\n`);
     assert.ok(warning.diagnostics.every(diagnostic => diagnostic.severity === 'warning'));
     assert.equal(lint(['warning.ts'], ['--deny-warnings']).status, 1);
     put('unused.ts', '// eslint-disable-next-line no-debugger -- intentionally unused\nexport const answer = 42;\n');
-    // This package does not set reportUnusedDisableDirectives, so the consumer does (it would also inherit if shipped).
+    // The default ships reportUnusedDisableDirectives: 'warn', so a consumer that extends it without setting the option gets the warning.
     put('oxlint.config.ts', `import config from '@hughescr/oxlint-config-default';
-export default { extends: [config], options: { reportUnusedDisableDirectives: 'warn' } };\n`);
-    assert.ok(lint(['unused.ts']).diagnostics.some(diagnostic => /unused/iu.test(diagnostic.message)));
+export default { extends: [config] };\n`);
+    const unused = lint(['unused.ts']);
+    assert.ok(unused.diagnostics.some(diagnostic => /unused/iu.test(diagnostic.message) && diagnostic.severity === 'warning'), 'default must warn on unused disable directives');
+    // The consumer's own value wins over the inherited one.
+    put('oxlint.config.ts', `import config from '@hughescr/oxlint-config-default';
+export default { extends: [config], options: { reportUnusedDisableDirectives: 'off' } };\n`);
+    assert.ok(!lint(['unused.ts']).diagnostics.some(diagnostic => /unused/iu.test(diagnostic.message)), 'consumer option must win over the default');
     has(lint(['bad.ts']), 'typescript(no-floating-promises)');
     put('a/internal.ts', '/** @internal */\nexport const privateValue = 1;\n');
     put('b/use.ts', "import { privateValue } from '../a/internal';\nexport const answer = privateValue;\n");

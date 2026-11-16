@@ -79,7 +79,8 @@ export const bunTest = {
 export default {
     categories,
     plugins: ['typescript', 'unicorn', 'import', 'node', 'promise', 'oxc'],
-    options: { typeAware: true },
+    // Options inherit through `extends` field by field; a consumer's own value wins.
+    options: { typeAware: true, reportUnusedDisableDirectives: 'warn' },
     jsPlugins: [
         // Native plugin names are reserved, so leftover ESLint rules use aliases.
         jsPlugin('eslint-core', './plugins/eslint-core.mjs'),
