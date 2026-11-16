@@ -1,7 +1,7 @@
 {
   "name": "@hughescr/oxlint-config-default",
   "version": "0.0.0",
-  "description": "Default base config for Oxlint (rule-set skeleton)",
+  "description": "Shared explicit-rule Oxlint config for JavaScript and TypeScript",
   "repository": {
     "type": "git",
     "url": "git://github.com/hughescr/oxlint-config-default.git"
@@ -11,17 +11,37 @@
   "type": "module",
   "exports": "./index.mjs",
   "files": [
-    "index.mjs"
+    "index.mjs",
+    "rules.mjs",
+    "plugins",
+    "ast-grep"
   ],
   "sideEffects": false,
   "scripts": {
     "test": "bun test/self-check.mjs",
-    "lint": "oxlint -c oxlint.config.ts index.mjs test/self-check.mjs",
+    "lint": "node node_modules/oxlint/bin/oxlint -c oxlint.config.ts --deny-warnings index.mjs rules.mjs plugins test/self-check.mjs",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge main"
   },
   "peerDependencies": {
     "oxlint": ">=1.94.0",
     "tsrs": "*"
+  },
+  "dependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.7.1",
+    "@eslint/compat": "^2.0.5",
+    "@hughescr/eslint-plugin-module-boundaries": "^1.0.0",
+    "@hughescr/eslint-plugin-test-hygiene": "^1.0.0",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.2.1",
+    "eslint-plugin-import-x": "^4.16.2",
+    "eslint-plugin-jest": "^29.15.0",
+    "eslint-plugin-lodash": "^8.0.0",
+    "eslint-plugin-lodash-es": "^1.2.1",
+    "eslint-plugin-n": "^17.24.0",
+    "eslint-plugin-regexp": "^3.1.0",
+    "eslint-plugin-sonarjs": "^4.0.3",
+    "eslint-plugin-unicorn": "^64.0.0",
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "oxlint": "1.94.0",

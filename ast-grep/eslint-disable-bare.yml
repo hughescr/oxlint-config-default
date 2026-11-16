@@ -1,0 +1,23 @@
+id: eslint-disable-bare
+language: typescript
+severity: error
+message: bare eslint-disable (no rule list) is not allowed (replaces eslint-comments/no-unlimited-disable)
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(-next-line|-line)?\s*(--.*)?(\*/)?\s*$'
+---
+id: eslint-disable-bare-javascript
+language: javascript
+severity: error
+message: bare eslint-disable (no rule list) is not allowed
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(-next-line|-line)?\s*(--.*)?(\*/)?\s*$'
+---
+id: eslint-disable-bare-tsx
+language: tsx
+severity: error
+message: bare eslint-disable (no rule list) is not allowed
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(-next-line|-line)?\s*(--.*)?(\*/)?\s*$'

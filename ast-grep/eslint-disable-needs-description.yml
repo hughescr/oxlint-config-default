@@ -1,0 +1,32 @@
+id: eslint-disable-needs-description
+language: typescript
+severity: error
+message: eslint-disable directives need ` -- reason` (replaces eslint-comments/require-description)
+rule:
+  kind: comment
+  all:
+    - regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(-next-line|-line)?\b'
+    - not:
+        regex: '\s--\s+([^\s*]|\*[^/])'
+---
+id: eslint-disable-needs-description-javascript
+language: javascript
+severity: error
+message: eslint-disable directives need ` -- reason`
+rule:
+  kind: comment
+  all:
+    - regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(-next-line|-line)?\b'
+    - not:
+        regex: '\s--\s+([^\s*]|\*[^/])'
+---
+id: eslint-disable-needs-description-tsx
+language: tsx
+severity: error
+message: eslint-disable directives need ` -- reason`
+rule:
+  kind: comment
+  all:
+    - regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(-next-line|-line)?\b'
+    - not:
+        regex: '\s--\s+([^\s*]|\*[^/])'
