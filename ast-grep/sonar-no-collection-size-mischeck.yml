@@ -1,0 +1,44 @@
+id: sonar-no-collection-size-mischeck
+language: typescript
+severity: error
+message: A collection's length/size is never negative, so this comparison is always true or always false (replaces sonarjs/no-collection-size-mischeck)
+rule:
+  any:
+    - pattern: $A.length < 0
+    - pattern: $A.length >= 0
+    - pattern: $A.size < 0
+    - pattern: $A.size >= 0
+    - pattern: 0 > $A.length
+    - pattern: 0 <= $A.length
+    - pattern: 0 > $A.size
+    - pattern: 0 <= $A.size
+---
+id: sonar-no-collection-size-mischeck-javascript
+language: javascript
+severity: error
+message: A collection's length/size is never negative, so this comparison is always true or always false
+rule:
+  any:
+    - pattern: $A.length < 0
+    - pattern: $A.length >= 0
+    - pattern: $A.size < 0
+    - pattern: $A.size >= 0
+    - pattern: 0 > $A.length
+    - pattern: 0 <= $A.length
+    - pattern: 0 > $A.size
+    - pattern: 0 <= $A.size
+---
+id: sonar-no-collection-size-mischeck-tsx
+language: tsx
+severity: error
+message: A collection's length/size is never negative, so this comparison is always true or always false
+rule:
+  any:
+    - pattern: $A.length < 0
+    - pattern: $A.length >= 0
+    - pattern: $A.size < 0
+    - pattern: $A.size >= 0
+    - pattern: 0 > $A.length
+    - pattern: 0 <= $A.length
+    - pattern: 0 > $A.size
+    - pattern: 0 <= $A.size

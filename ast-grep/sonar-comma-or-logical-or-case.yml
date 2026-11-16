@@ -1,0 +1,38 @@
+id: sonar-comma-or-logical-or-case
+language: typescript
+severity: error
+message: "case with `||` or the comma operator only matches one operand; use stacked case labels (replaces sonarjs/comma-or-logical-or-case)"
+rule:
+  kind: switch_case
+  has:
+    field: value
+    stopBy: end
+    any:
+      - kind: sequence_expression
+      - pattern: $A || $B
+---
+id: sonar-comma-or-logical-or-case-javascript
+language: javascript
+severity: error
+message: "case with `||` or the comma operator only matches one operand; use stacked case labels"
+rule:
+  kind: switch_case
+  has:
+    field: value
+    stopBy: end
+    any:
+      - kind: sequence_expression
+      - pattern: $A || $B
+---
+id: sonar-comma-or-logical-or-case-tsx
+language: tsx
+severity: error
+message: "case with `||` or the comma operator only matches one operand; use stacked case labels"
+rule:
+  kind: switch_case
+  has:
+    field: value
+    stopBy: end
+    any:
+      - kind: sequence_expression
+      - pattern: $A || $B

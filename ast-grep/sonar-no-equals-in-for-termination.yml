@@ -1,0 +1,59 @@
+id: sonar-no-equals-in-for-termination
+language: typescript
+severity: error
+message: Use a relational operator (<, <=, >, >=) in a for-loop termination condition; == / != on a stepped counter can loop forever (replaces sonarjs/no-equals-in-for-termination)
+rule:
+  kind: for_statement
+  all:
+    - has:
+        field: condition
+        any:
+          - pattern: $A == $B
+          - pattern: $A === $B
+          - pattern: $A != $B
+          - pattern: $A !== $B
+    - has:
+        field: increment
+        any:
+          - kind: update_expression
+          - kind: augmented_assignment_expression
+---
+id: sonar-no-equals-in-for-termination-javascript
+language: javascript
+severity: error
+message: Use a relational operator (<, <=, >, >=) in a for-loop termination condition; == / != on a stepped counter can loop forever
+rule:
+  kind: for_statement
+  all:
+    - has:
+        field: condition
+        any:
+          - pattern: $A == $B
+          - pattern: $A === $B
+          - pattern: $A != $B
+          - pattern: $A !== $B
+    - has:
+        field: increment
+        any:
+          - kind: update_expression
+          - kind: augmented_assignment_expression
+---
+id: sonar-no-equals-in-for-termination-tsx
+language: tsx
+severity: error
+message: Use a relational operator (<, <=, >, >=) in a for-loop termination condition; == / != on a stepped counter can loop forever
+rule:
+  kind: for_statement
+  all:
+    - has:
+        field: condition
+        any:
+          - pattern: $A == $B
+          - pattern: $A === $B
+          - pattern: $A != $B
+          - pattern: $A !== $B
+    - has:
+        field: increment
+        any:
+          - kind: update_expression
+          - kind: augmented_assignment_expression

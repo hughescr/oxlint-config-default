@@ -1,0 +1,26 @@
+id: sonar-no-useless-increment
+language: typescript
+severity: error
+message: Post-increment/decrement assigned back to the same variable is a no-op (replaces sonarjs/no-useless-increment)
+rule:
+  any:
+    - pattern: $X = $X++
+    - pattern: $X = $X--
+---
+id: sonar-no-useless-increment-javascript
+language: javascript
+severity: error
+message: Post-increment/decrement assigned back to the same variable is a no-op
+rule:
+  any:
+    - pattern: $X = $X++
+    - pattern: $X = $X--
+---
+id: sonar-no-useless-increment-tsx
+language: tsx
+severity: error
+message: Post-increment/decrement assigned back to the same variable is a no-op
+rule:
+  any:
+    - pattern: $X = $X++
+    - pattern: $X = $X--

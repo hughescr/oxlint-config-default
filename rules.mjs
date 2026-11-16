@@ -14,7 +14,8 @@ export const core = {
         no-unreachable no-unsafe-finally no-unused-labels no-unused-private-class-members
         no-useless-assignment no-useless-catch no-with require-yield no-nested-ternary block-scoped-var
         default-param-last no-loop-func no-self-compare no-unmodified-loop-condition no-useless-call
-        no-useless-concat no-template-curly-in-string no-new-wrappers no-throw-literal`),
+        no-useless-concat no-template-curly-in-string no-new-wrappers no-throw-literal
+        no-new oxc/missing-throw`),
     ...warnings(`default-case-last no-constructor-return no-var prefer-object-spread no-await-in-loop
         symbol-description prefer-template prefer-exponentiation-operator logical-assignment-operators
         prefer-object-has-own no-useless-constructor no-useless-return object-shorthand`),
@@ -262,69 +263,177 @@ export const unicornJs = {
     'unicorn-js/template-indent': ['error', { tags: ['outdent', 'dedent', 'gql', 'sql', 'html', 'styled'], functions: ['dedent', 'stripIndent'], selectors: [], comments: ['HTML', 'indent'] }],
 };
 
-// The expensive SonarJS list is intentionally isolated for later pruning.
-// Silent type-dependent rules and void-use are not enabled.
-export const sonarjs = {
-    ...errors(`sonarjs/no-commented-code sonarjs/no-fallthrough sonarjs/no-equals-in-for-termination
-        sonarjs/no-extra-arguments sonarjs/no-labels sonarjs/no-nested-assignment sonarjs/no-redundant-boolean
-        sonarjs/prefer-single-boolean-return sonarjs/unused-import sonarjs/fixme-tag sonarjs/todo-tag
-        sonarjs/no-case-label-in-switch sonarjs/no-parameter-reassignment sonarjs/prefer-while sonarjs/no-small-switch
-        sonarjs/no-hardcoded-ip sonarjs/label-position sonarjs/public-static-readonly sonarjs/call-argument-line
-        sonarjs/function-inside-loop sonarjs/code-eval sonarjs/future-reserved-words sonarjs/bitwise-operators
-        sonarjs/no-primitive-wrappers sonarjs/no-skipped-tests sonarjs/no-identical-expressions
-        sonarjs/constructor-for-side-effects sonarjs/no-dead-store sonarjs/no-identical-conditions
-        sonarjs/no-duplicated-branches sonarjs/no-inverted-boolean-check sonarjs/misplaced-loop-counter
-        sonarjs/sql-queries sonarjs/insecure-cookie sonarjs/no-useless-increment sonarjs/no-globals-shadowing
-        sonarjs/no-empty-test-file sonarjs/arguments-order sonarjs/pseudo-random sonarjs/for-loop-increment-sign
-        sonarjs/updated-loop-counter sonarjs/block-scoped-var sonarjs/no-ignored-exceptions
-        sonarjs/no-gratuitous-expressions sonarjs/file-uploads sonarjs/file-permissions sonarjs/no-empty-character-class
-        sonarjs/no-unenclosed-multiline-block sonarjs/assertions-in-tests sonarjs/no-implicit-global sonarjs/no-useless-catch
-        sonarjs/xml-parser-xxe sonarjs/non-existent-operator sonarjs/no-incomplete-assertions sonarjs/no-global-this
-        sonarjs/no-delete-var sonarjs/cookie-no-httponly sonarjs/no-nested-conditional sonarjs/inverted-assertion-arguments
-        sonarjs/updated-const-var sonarjs/no-invariant-returns sonarjs/generator-without-yield
-        sonarjs/comma-or-logical-or-case sonarjs/no-redundant-jump sonarjs/inconsistent-function-call
-        sonarjs/no-use-of-empty-return-value sonarjs/no-all-duplicated-branches sonarjs/no-same-line-conditional
-        sonarjs/no-collection-size-mischeck sonarjs/no-unthrown-error sonarjs/no-unused-collection
-        sonarjs/no-os-command-from-path sonarjs/no-element-overwrite sonarjs/no-empty-collection
-        sonarjs/no-redundant-assignments sonarjs/prefer-type-guard sonarjs/use-type-alias sonarjs/weak-ssl
-        sonarjs/no-weak-keys sonarjs/csrf sonarjs/production-debug sonarjs/prefer-default-last
-        sonarjs/no-duplicate-in-composite sonarjs/no-nested-template-literals sonarjs/prefer-promise-shorthand
-        sonarjs/os-command sonarjs/no-redundant-optional sonarjs/hashing sonarjs/unverified-certificate sonarjs/cors
-        sonarjs/link-with-target-blank sonarjs/disabled-auto-escaping sonarjs/table-header sonarjs/no-table-as-layout
-        sonarjs/table-header-reference sonarjs/object-alt-content sonarjs/no-clear-text-protocols
-        sonarjs/publicly-writable-directories sonarjs/unverified-hostname sonarjs/encryption-secure-mode
-        sonarjs/no-weak-cipher sonarjs/insecure-jwt-token sonarjs/x-powered-by sonarjs/hidden-files
-        sonarjs/content-security-policy sonarjs/no-mixed-content sonarjs/frame-ancestors sonarjs/no-mime-sniff
-        sonarjs/no-referrer-policy sonarjs/strict-transport-security sonarjs/confidential-information-logging
-        sonarjs/no-ip-forward sonarjs/empty-string-repetition sonarjs/anchor-precedence sonarjs/slow-regex
-        sonarjs/no-invalid-regexp sonarjs/no-same-argument-assert sonarjs/no-misleading-character-class
-        sonarjs/duplicates-in-character-class sonarjs/session-regeneration sonarjs/test-check-exception
-        sonarjs/stable-tests sonarjs/no-empty-after-reluctant sonarjs/single-character-alternation sonarjs/no-code-after-done
-        sonarjs/disabled-timeout sonarjs/chai-determinate-assertion sonarjs/aws-s3-bucket-insecure-http
-        sonarjs/aws-s3-bucket-versioning sonarjs/aws-s3-bucket-granted-access sonarjs/no-angular-bypass-sanitization
-        sonarjs/aws-iam-public-access sonarjs/aws-ec2-unencrypted-ebs-volume sonarjs/aws-s3-bucket-public-access
-        sonarjs/aws-iam-all-privileges sonarjs/aws-rds-unencrypted-databases sonarjs/aws-opensearchservice-domain
-        sonarjs/aws-iam-privilege-escalation sonarjs/aws-sagemaker-unencrypted-notebook sonarjs/aws-restricted-ip-admin-access
-        sonarjs/no-empty-alternatives sonarjs/no-control-regex sonarjs/no-regex-spaces sonarjs/aws-sns-unencrypted-topics
-        sonarjs/aws-ec2-rds-dms-public sonarjs/aws-sqs-unencrypted-queue sonarjs/no-empty-group sonarjs/aws-efs-unencrypted
-        sonarjs/aws-apigateway-public-api sonarjs/stateful-regex sonarjs/concise-regex sonarjs/single-char-in-character-classes
-        sonarjs/no-exclusive-tests sonarjs/hardcoded-secret-signatures sonarjs/no-hook-setter-in-body
-        sonarjs/no-useless-react-setstate sonarjs/no-uniq-key sonarjs/redundant-type-aliases sonarjs/no-internal-api-use
-        sonarjs/no-literal-call sonarjs/reduce-initial-value sonarjs/review-blockchain-mnemonic
-        sonarjs/dynamically-constructed-templates sonarjs/no-session-cookies-on-static-assets sonarjs/dompurify-unsafe-config`),
-    'sonarjs/class-name': ['error', { format: '^\\$?[A-Z][a-zA-Z0-9]*$' }],
-    'sonarjs/no-collapsible-if': 'warn',
-    'sonarjs/max-switch-cases': ['error', 30],
-    'sonarjs/prefer-immediate-return': 'warn',
-    'sonarjs/no-nested-functions': ['error', { threshold: 4 }],
-    'sonarjs/no-hardcoded-passwords': ['error', { passwordWords: ['password', 'pwd', 'passwd', 'passphrase'] }],
+// SonarJS is a small reliable core plus opt-in groups; every block is `{ rules, tests }`: `rules` apply to all files,
+// `tests` go in a test-file override. All load through plugins/sonarjs-oxlint.mjs (per-file cache reset).
+// Silent type-dependent rules (`sonarjsSilent`) and `void-use` are never enabled: JS plugins get no type information.
+const sonar = names => levels('error', names.split(/\s+/u).filter(Boolean).map(name => `sonarjs/${name}`).join(' '));
+
+// Core, general defect and security rules (non-test files). The last four also run on test files.
+const sonarCoreGeneral = {
+    ...sonar(`no-floating-point-equality no-hardcoded-ip no-identical-expressions no-duplicated-branches
+        misplaced-loop-counter no-globals-shadowing pseudo-random no-ignored-exceptions file-permissions
+        non-existent-operator no-invariant-returns inconsistent-function-call no-use-of-empty-return-value
+        no-all-duplicated-branches no-unused-collection no-element-overwrite no-empty-collection weak-ssl
+        no-weak-keys unverified-certificate no-clear-text-protocols publicly-writable-directories
+        unverified-hostname encryption-secure-mode no-weak-cipher stateful-regex redundant-type-aliases
+        memoize-cache-key avoid-mutating-nested-properties-of-shallow-clones anchor-precedence`),
     'sonarjs/cognitive-complexity': ['warn', 15],
-    'sonarjs/no-identical-functions': ['error', 3],
-    'sonarjs/no-intrusive-permissions': ['error', { permissions: ['geolocation'] }],
-    'sonarjs/content-length': ['error', { fileUploadSizeLimit: 8000000, standardSizeLimit: 2000000 }],
     'sonarjs/regex-complexity': ['error', { threshold: 20 }],
+    'sonarjs/no-hardcoded-passwords': ['error', { passwordWords: ['password', 'pwd', 'passwd', 'passphrase'] }],
     'sonarjs/no-hardcoded-secrets': ['error', { secretWords: 'api[_.-]?key,auth,credential,secret,token', randomnessSensibility: 5 }],
 };
+const sonarCoreShared = {
+    ...sonar('no-os-command-from-path hashing no-internal-api-use'),
+    'sonarjs/no-identical-functions': ['error', 3],
+};
+// Core, test-semantic rules (test files only).
+const sonarCoreTests = sonar(`no-empty-test-file no-incomplete-assertions inverted-assertion-arguments
+    parameterized-tests no-trivial-assertions async-test-assertions explicit-test-skip
+    no-empty-parameterized-test-dataset no-duplicate-parameterized-test-case`);
+export const sonarjs = {
+    rules: { ...sonarCoreGeneral, ...sonarCoreShared },
+    tests: {
+        ...levels('off', Object.keys(sonarCoreGeneral).join(' ')),
+        ...sonarCoreShared,
+        ...sonarCoreTests,
+    },
+};
+
+// Opt-in: AWS CDK / infrastructure rules.
+export const sonarjsAws = {
+    rules: sonar(`aws-apigateway-public-api aws-ec2-rds-dms-public aws-ec2-unencrypted-ebs-volume aws-efs-unencrypted
+        aws-iam-all-privileges aws-iam-privilege-escalation aws-iam-public-access aws-opensearchservice-domain
+        aws-rds-unencrypted-databases aws-restricted-ip-admin-access aws-s3-bucket-granted-access
+        aws-s3-bucket-insecure-http aws-s3-bucket-public-access aws-s3-bucket-versioning
+        aws-sagemaker-unencrypted-notebook aws-sns-unencrypted-topics aws-sqs-unencrypted-queue`),
+    tests: {},
+};
+
+// Opt-in: web servers and general injection/secret-handling security (cookies, headers, HTTP libraries, XML, shells, SQL).
+export const sonarjsWeb = {
+    rules: {
+        ...sonar(`content-security-policy cookie-no-httponly cors csrf file-uploads insecure-cookie insecure-jwt-token
+            no-mime-sniff no-referrer-policy no-session-cookies-on-static-assets session-regeneration
+            strict-transport-security x-powered-by xml-parser-xxe hardcoded-secret-signatures production-debug
+            review-blockchain-mnemonic os-command sql-queries disabled-auto-escaping dompurify-unsafe-config
+            hidden-files no-mixed-content frame-ancestors confidential-information-logging no-ip-forward`),
+        'sonarjs/content-length': ['error', { fileUploadSizeLimit: 8000000, standardSizeLimit: 2000000 }],
+        'sonarjs/no-intrusive-permissions': ['error', { permissions: ['geolocation'] }],
+    },
+    tests: {},
+};
+
+// Opt-in: React, Vue, Angular, jQuery, axios, HTML and JSX rules.
+export const sonarjsFrameworks = {
+    rules: sonar(`link-with-target-blank no-angular-bypass-sanitization no-debounce-throttle-in-render
+        no-hook-setter-in-body no-mutate-reactive-state-in-updated-hook no-useless-react-setstate no-uniq-key
+        no-vue-class-component no-vue-mixins prefer-native-axios-alternative prefer-native-jquery-alternative
+        table-header table-header-reference no-table-as-layout object-alt-content dynamically-constructed-templates`),
+    tests: {},
+};
+
+// Opt-in: chai, cypress, mocha, testing-library, vitest and other test-tool rules (test files only).
+export const sonarjsTestTooling = {
+    rules: {},
+    tests: sonar(`chai-determinate-assertion disabled-timeout no-debug-commands-in-ui-tests no-fixed-wait-in-tests
+        no-forced-browser-interaction no-interpolation-in-inline-snapshots no-same-argument-assert
+        prefer-cypress-should testing-library-prefer-query-by-disappearance testing-library-query-assertion
+        vitest-mock-at-module-scope assertions-in-tests no-incompatible-assertion-types
+        synchronous-exception-assertions`),
+};
+
+// Opt-in: style and low-value rules, with the shared ESLint config's options.
+export const sonarjsStyle = {
+    rules: {
+        ...sonar(`no-default-utility-imports no-inverted-boolean-check no-nested-assignment no-nested-template-literals
+            no-same-line-conditional no-small-switch prefer-native-lodash-alternative prefer-promise-shorthand
+            prefer-single-boolean-return prefer-type-guard prefer-while public-static-readonly updated-loop-counter
+            use-type-alias no-commented-code arguments-order no-redundant-optional no-control-regex`),
+        'sonarjs/class-name': ['error', { format: '^\\$?[A-Z][a-zA-Z0-9]*$' }],
+        'sonarjs/max-switch-cases': ['error', 30],
+        'sonarjs/no-nested-functions': ['error', { threshold: 5 }],
+        'sonarjs/prefer-immediate-return': 'warn',
+    },
+    tests: sonar('prefer-specific-assertions stable-tests test-check-exception'),
+};
+
+// Dropped from every default: what covers each rule. Ids are Oxlint ids as enabled by this package; `bunTest:` ids are
+// enabled by the optional bunTest export; `tsc:` entries are compiler diagnostics (keep a separate typecheck gate).
+export const sonarjsCovered = {
+    'assertions-in-test-cases': ['bunTest:jest-js/no-standalone-expect', 'bunTest:jest-js/expect-expect'],
+    'block-scoped-var': ['block-scoped-var'],
+    'call-argument-line': ['no-unexpected-multiline'],
+    'code-eval': ['no-eval', 'typescript/no-implied-eval'],
+    'empty-string-repetition': ['regexp/confusing-quantifier', 'regexp/no-trivially-nested-quantifier'],
+    'fixme-tag': ['no-warning-comments'],
+    'for-loop-increment-sign': ['for-direction'],
+    'function-inside-loop': ['no-loop-func'],
+    'future-reserved-words': ['tsc:TS1212,TS1213'],
+    'generator-without-yield': ['require-yield'],
+    'hooks-before-test-cases': ['bunTest:jest-js/prefer-hooks-on-top'],
+    'no-case-label-in-switch': ['no-unused-labels'],
+    'no-code-after-done': ['bunTest:jest-js/no-done-callback'],
+    'no-collapsible-if': ['unicorn/no-lonely-if'],
+    'no-dead-store': ['no-useless-assignment'],
+    'no-delete-var': ['no-delete-var'],
+    'no-duplicate-in-composite': ['typescript/no-duplicate-type-constituents'],
+    'no-exclusive-tests': ['bunTest:jest-js/no-focused-tests'],
+    'no-extra-arguments': ['tsc:TS2554'],
+    'no-fallthrough': ['no-fallthrough'],
+    'no-global-this': ['tsc:TS2683,TS7041'],
+    'no-gratuitous-expressions': ['typescript/no-unnecessary-condition'],
+    'no-identical-conditions': ['no-dupe-else-if', 'no-duplicate-case'],
+    'no-implicit-global': ['no-undef'],
+    'no-literal-call': ['tsc:TS2349'],
+    'no-nested-conditional': ['no-nested-ternary', 'unicorn/no-nested-ternary'],
+    'no-parameter-reassignment': ['no-param-reassign'],
+    'no-primitive-wrappers': ['no-new-wrappers', 'typescript/no-wrapper-object-types'],
+    'no-redundant-assignments': ['no-self-assign', 'no-useless-assignment'],
+    'no-redundant-jump': ['no-useless-return'],
+    'no-regex-spaces': ['no-regex-spaces'],
+    'no-skipped-tests': ['bunTest:jest-js/no-disabled-tests'],
+    'no-unenclosed-multiline-block': ['curly', 'no-unexpected-multiline'],
+    'no-useless-catch': ['no-useless-catch'],
+    'prefer-default-last': ['default-case-last'],
+    'super-linear-regex': ['regexp/no-super-linear-backtracking', 'regexp/no-super-linear-move'],
+    'todo-tag': ['no-warning-comments'],
+    'updated-const-var': ['no-const-assign'],
+    // Duplicates of built-ins that the default enables for exactly this purpose.
+    'constructor-for-side-effects': ['no-new'],
+    'no-unthrown-error': ['oxc/missing-throw'],
+    // Previously enabled here; covered by the regexp plugin, native rules or the compiler.
+    'unused-import': ['no-unused-vars'],
+    'bitwise-operators': ['no-bitwise'],
+    'no-empty-character-class': ['regexp/no-empty-character-class'],
+    'slow-regex': ['regexp/no-super-linear-backtracking', 'regexp/no-super-linear-move'],
+    'no-invalid-regexp': ['regexp/no-invalid-regexp'],
+    'no-misleading-character-class': ['regexp/no-misleading-unicode-character'],
+    'duplicates-in-character-class': ['regexp/no-dupe-characters-character-class'],
+    'no-empty-after-reluctant': ['regexp/no-useless-lazy', 'regexp/no-lazy-ends'],
+    'single-character-alternation': ['regexp/prefer-character-class'],
+    'no-empty-alternatives': ['regexp/no-empty-alternative'],
+    'no-empty-group': ['regexp/no-empty-group', 'regexp/no-empty-capturing-group'],
+    'concise-regex': ['regexp/prefer-d', 'regexp/prefer-w', 'regexp/prefer-plus-quantifier', 'regexp/prefer-star-quantifier', 'regexp/prefer-question-quantifier'],
+    'single-char-in-character-classes': ['regexp/no-useless-character-class'],
+};
+// Duplicates of a built-in rule that this package does NOT enable; the named built-in would cover them.
+export const sonarjsNotCovered = {
+    'label-position': 'no-labels',
+    'no-duplicate-test-title': 'jest-js/no-identical-title',
+    'no-empty-test-title': 'jest-js/valid-title',
+    'no-labels': 'no-labels',
+    'no-redundant-boolean': 'typescript/no-unnecessary-boolean-literal-compare (type-aware)',
+    'synchronous-suite-callback': 'jest-js/valid-describe-callback',
+};
+// Ported to ast-grep (see the ast-grep directory).
+export const sonarjsAstGrep = ['comma-or-logical-or-case', 'no-collection-size-mischeck', 'no-equals-in-for-termination', 'no-useless-increment', 'reduce-initial-value'];
+// Silent without type information (or over-reporting, for void-use): never enabled.
+export const sonarjsSilent = `deprecation no-ignored-return null-dereference no-selector-parameter index-of-compare-to-positive-number
+    post-message no-array-delete no-alphabetical-sort new-operator-misuse different-types-comparison no-associative-arrays
+    void-use argument-type in-operator-type-error array-callback-without-return function-return-type
+    no-misleading-array-reverse no-useless-intersection no-in-misuse no-try-promise disabled-resource-integrity
+    unused-named-groups existing-groups jsx-no-leaked-render prefer-regexp-exec prefer-read-only-props
+    no-async-constructor`.split(/\s+/u);
 export const eslintCore = {
     'eslint-core/dot-notation': ['warn', { allowKeywords: true, allowPattern: '' }],
     'eslint-core/require-atomic-updates': ['warn', { allowProperties: false }],

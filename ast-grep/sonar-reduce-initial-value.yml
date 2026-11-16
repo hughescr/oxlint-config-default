@@ -1,0 +1,26 @@
+id: sonar-reduce-initial-value
+language: typescript
+severity: error
+message: reduce()/reduceRight() without an initial value throws TypeError on an empty array (replaces sonarjs/reduce-initial-value)
+rule:
+  any:
+    - pattern: $A.reduce($F)
+    - pattern: $A.reduceRight($F)
+---
+id: sonar-reduce-initial-value-javascript
+language: javascript
+severity: error
+message: reduce()/reduceRight() without an initial value throws TypeError on an empty array
+rule:
+  any:
+    - pattern: $A.reduce($F)
+    - pattern: $A.reduceRight($F)
+---
+id: sonar-reduce-initial-value-tsx
+language: tsx
+severity: error
+message: reduce()/reduceRight() without an initial value throws TypeError on an empty array
+rule:
+  any:
+    - pattern: $A.reduce($F)
+    - pattern: $A.reduceRight($F)

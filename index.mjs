@@ -6,12 +6,40 @@ const jsPlugin = (name, packageName) => ({ name, specifier: require.resolve(pack
 const categories = Object.fromEntries(['correctness', 'suspicious', 'pedantic', 'perf', 'style', 'restriction', 'nursery'].map(name => [name, 'off']));
 const typescriptFiles = ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts'];
 const testFiles = ['**/*.{test,spec}.{js,cjs,mjs,jsx,ts,cts,mts,tsx}'];
+const sourceFiles = ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}'];
 
-/** Expensive syntax-only and degraded SonarJS rules; also included in the default. */
-export const sonarjs = {
-    jsPlugins: [jsPlugin('sonarjs', 'eslint-plugin-sonarjs')],
-    rules: rules.sonarjs,
-};
+// Oxlint does not inherit root `env`, `globals`, `ignorePatterns` or `settings` from an extended object, but it
+// does inherit `env` and `globals` set inside `overrides`, so the default delivers env that way (see README).
+const env = { builtin: true, node: true, es2024: true };
+
+/**
+ * Fields Oxlint reads only at the config root. Spread this into the consumer's root config and merge settings:
+ * `{ ...root, extends: [config], settings: { ...root.settings, ...bunTest.settings } }`. The default already
+ * delivers `env` through an inherited override, so `settings` is the field that needs this; `env` is repeated
+ * here so the root applies it too.
+ */
+export const root = { env, settings: {} };
+
+// Every SonarJS block loads the plugin through the same wrapper that clears its per-file cache (see the wrapper).
+const sonarjsPlugin = jsPlugin('sonarjs', './plugins/sonarjs-oxlint.mjs');
+const sonarBlock = ({ rules: general, tests }) => ({
+    jsPlugins: [sonarjsPlugin],
+    rules: general,
+    overrides: Object.keys(tests).length > 0 ? [{ files: testFiles, rules: tests }] : [],
+});
+
+/** SonarJS core: 47 reliable rules, scoped (general rules on non-test files, test-semantic rules on test files). Included in the default. */
+export const sonarjs = sonarBlock(rules.sonarjs);
+/** Opt-in: AWS CDK / infrastructure rules. */
+export const sonarjsAws = sonarBlock(rules.sonarjsAws);
+/** Opt-in: web server, cookie, header, HTTP library and general injection/secret security rules. */
+export const sonarjsWeb = sonarBlock(rules.sonarjsWeb);
+/** Opt-in: React, Vue, Angular, jQuery, axios, HTML and JSX rules. */
+export const sonarjsFrameworks = sonarBlock(rules.sonarjsFrameworks);
+/** Opt-in: chai, cypress, mocha, testing-library, vitest and other test-tool rules (test files). */
+export const sonarjsTestTooling = sonarBlock(rules.sonarjsTestTooling);
+/** Opt-in: style and low-value rules. */
+export const sonarjsStyle = sonarBlock(rules.sonarjsStyle);
 
 /** Optional lodash and lodash-es rules. */
 export const lodash = {
@@ -50,8 +78,7 @@ export const bunTest = {
 
 export default {
     categories,
-    plugins: ['typescript', 'unicorn', 'import', 'node', 'promise'],
-    env: { builtin: true, node: true, es2024: true },
+    plugins: ['typescript', 'unicorn', 'import', 'node', 'promise', 'oxc'],
     options: { typeAware: true },
     jsPlugins: [
         // Native plugin names are reserved, so leftover ESLint rules use aliases.
@@ -84,6 +111,9 @@ export default {
         ...sonarjs.rules,
     },
     overrides: [
+        // `env` at the root does not inherit through `extends`, but inside an override it does.
+        { files: sourceFiles, env },
+        ...sonarjs.overrides,
         { files: typescriptFiles, rules: rules.typescript },
         // All-language test relaxations must not accidentally enable TS rules on JS tests.
         { files: testFiles, rules: rules.tests },
