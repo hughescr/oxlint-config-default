@@ -523,11 +523,80 @@ export default {
         }
     }
     put('repeat/mid.test.ts', `import { it, expect } from 'bun:test';\nit('trivial', () => { expect(true).toBe(true); });\n`);
-    put('oxlint.config.ts', `import { sonarjs } from '@hughescr/oxlint-config-default';\nexport default { categories: { correctness: 'off' }, extends: [sonarjs] };\n`);
+    // Optional `boundaries` add-on: two layers, one forbidden import (fires) and one allowed import (clean).
+    // Elements resolve against the working directory (the consumer root), exactly like a real project.
+    assert.ok(pkg.boundaries && typeof pkg.defineBoundaries === 'function', 'boundaries and defineBoundaries must be exported');
+    assert.ok(isAbsolute(pkg.boundaries.jsPlugins[0].specifier) && pkg.boundaries.jsPlugins[0].name === 'boundaries', 'boundaries loads the plugin by absolute specifier');
+    const resolverKeys = Object.keys(pkg.boundaries.settings['import/resolver']);
+    assert.ok(resolverKeys.length === 1 && isAbsolute(resolverKeys[0]), 'the import resolver is addressed by absolute path so a strict installer cannot lose it');
+    assert.equal(pkg.boundaries.rules, undefined, 'the bare add-on carries no project policy');
+    const layerElements = [{ type: 'low', pattern: 'layers/low/**' }, { type: 'high', pattern: 'layers/high/**' }];
+    const architecture = pkg.defineBoundaries({
+        elements: layerElements,
+        dependencies: { default: 'disallow', policies: [{ from: { element: { type: 'high' } }, allow: { to: { element: { type: ['low'] } } } }] },
+        files: ['layers/**/*.ts'],
+    });
+    assert.deepEqual(architecture.settings['boundaries/elements'], layerElements);
+    assert.deepEqual(architecture.jsPlugins, pkg.boundaries.jsPlugins);
+    assert.equal(architecture.overrides.length, 1);
+    assert.deepEqual(architecture.overrides[0].files, ['layers/**/*.ts']);
+    assert.equal(architecture.overrides[0].rules['boundaries/dependencies'][0], 'error');
+    put('layers/low/a.ts', 'export const lowValue = 1;\n');
+    put('layers/high/b.ts', `import { lowValue } from '../low/a';\nexport const highValue = lowValue + 1;\n`);
+    put('layers/low/c.ts', `import { highValue } from '../high/b';\nexport const forbidden = highValue;\n`);
+    const architectureSource = `import { defineBoundaries } from '@hughescr/oxlint-config-default';
+const architecture = defineBoundaries({
+    elements: [{ type: 'low', pattern: 'layers/low/**' }, { type: 'high', pattern: 'layers/high/**' }],
+    dependencies: { default: 'disallow', policies: [{ from: { element: { type: 'high' } }, allow: { to: { element: { type: ['low'] } } } }] },
+    files: ['layers/**/*.ts'],
+});\n`;
+    // The boundaries add-on runs in the same repeated multi-file run as the sonarjs wrapper.
+    put('oxlint.config.ts', `import { sonarjs } from '@hughescr/oxlint-config-default';
+${architectureSource}export default { categories: { correctness: 'off' }, extends: [sonarjs, architecture], settings: { ...architecture.settings } };\n`);
     for (let run = 1; run <= 6; run++) {
-        const repeated = lint(['repeat']);
+        const repeated = lint(['repeat', 'layers']);
         assert.ok(repeated.diagnostics.some(diagnostic => diagnostic.code === 'sonarjs(no-trivial-assertions)' && diagnostic.filename.endsWith('mid.test.ts')), `run ${run}: test-gated sonarjs rule went silent`);
+        const boundaryHits = repeated.diagnostics.filter(diagnostic => diagnostic.code === 'boundaries(dependencies)');
+        assert.deepEqual(boundaryHits.map(diagnostic => diagnostic.filename), ['layers/low/c.ts'], `run ${run}: only the forbidden import may fire boundaries(dependencies)\n${repeated.stdout}${repeated.stderr}`);
     }
+    // Settings do not inherit through `extends`, so omitting the root merge silences the rule (the README documents this).
+    put('oxlint.config.ts', `${architectureSource}export default { categories: { correctness: 'off' }, extends: [architecture] };\n`);
+    assert.ok(!lint(['layers']).diagnostics.some(diagnostic => diagnostic.code === 'boundaries(dependencies)'), 'without the root settings merge the rule has no elements to classify with');
+
+    // `package-json` entry point: a minimal ESLint flat config that lints only package.json (Oxlint cannot).
+    const eslintCli = join(root, 'node_modules/eslint/bin/eslint.js');
+    put('eslint.package-json.config.mjs', `export { default } from '@hughescr/oxlint-config-default/package-json';\n`);
+    const lintManifest = (name, manifest) => {
+        put(`manifests/${name}/package.json`, typeof manifest === 'string' ? manifest : `${JSON.stringify(manifest, null, 2)}\n`);
+        const run = spawnSync('node', [eslintCli, '-c', 'eslint.package-json.config.mjs', '--format', 'json', `manifests/${name}/package.json`], { cwd: consumer, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+        assert.ifError(run.error);
+        assert.ok(run.status === 0 || run.status === 1, run.stdout + run.stderr);
+        const report = JSON.parse(run.stdout);
+        assert.equal(report.length, 1, run.stdout + run.stderr);
+        return { status: run.status, rules: report[0].messages.map(message => message.ruleId), messages: report[0].messages };
+    };
+    const pjConfig = (await import(pathToFileURL(join(packageRoot, 'package-json.mjs')).href)).default;
+    assert.ok(Array.isArray(pjConfig) && pjConfig.length > 0, 'package-json default export is a flat-config array');
+    assert.ok(pjConfig.every(entry => entry.plugins === undefined || Object.keys(entry.plugins).every(plugin => plugin === 'package-json')), 'only the package-json plugin is loaded');
+    assert.ok(!readFileSync(join(packageRoot, 'package-json.mjs'), 'utf8').includes('eslint-config-default'), 'package-json.mjs must not depend on the ESLint shared config');
+    const publishable = { name: 'good-package', version: '1.0.0', description: 'A well formed package', license: 'MIT', author: 'A Person <a@example.com>', type: 'module', exports: './index.mjs', files: ['index.mjs'], sideEffects: false, repository: { type: 'git', url: 'git+https://github.com/example/good-package.git' }, dependencies: { a: '^1.0.0', b: '^1.0.0' } };
+    const good = lintManifest('good', publishable);
+    assert.deepEqual(good.rules, [], JSON.stringify(good.messages));
+    assert.equal(good.status, 0);
+    const bad = lintManifest('bad', { ...publishable, version: 'not-a-version', keywords: [], files: [], dependencies: { b: '^1.0.0', a: '^1.0.0' }, scripts: { z: 'echo z', a: 'echo a' }, description: undefined, repository: 'github:example/good-package' });
+    assert.equal(bad.status, 1);
+    for (const rule of ['sort-collections', 'valid-version', 'no-empty-fields', 'require-description', 'repository-shorthand']) { assert.ok(bad.rules.includes(`package-json/${rule}`), `missing package-json/${rule}; got ${bad.rules.join(', ')}`); }
+    assert.equal(bad.messages.filter(message => message.ruleId === 'package-json/sort-collections').length, 2, 'dependencies and scripts are both checked');
+    assert.equal(bad.messages.filter(message => message.ruleId === 'package-json/no-empty-fields').length, 1, 'the empty keywords array is flagged but the empty files array is allowed (ignoreProperties: files)');
+    const invalidValue = lintManifest('invalid', { ...publishable, homepage: 5, bin: 5 });
+    assert.ok(invalidValue.rules.includes('package-json/valid-homepage') && invalidValue.rules.includes('package-json/valid-bin'), invalidValue.rules.join(', '));
+    // Private packages skip the attribution requirement (ignorePrivate); publishable ones do not.
+    const privateNoAuthor = lintManifest('private', { name: 'app', version: '1.0.0', private: true, description: 'An app', type: 'module' });
+    assert.deepEqual(privateNoAuthor.rules, [], JSON.stringify(privateNoAuthor.messages));
+    assert.ok(lintManifest('public-no-author', { ...publishable, author: undefined }).rules.includes('package-json/require-attribution'));
+    const duplicate = lintManifest('duplicate', `{ "name": "d", "version": "1.0.0", "private": true, "description": "d", "type": "module", "dependencies": { "a": "1.0.0", "a": "2.0.0" } }\n`);
+    assert.ok(duplicate.rules.includes('package-json/unique-dependencies'), duplicate.rules.join(', '));
+
     const astGrep = spawnSync('ast-grep', ['--version'], { encoding: 'utf8' });
     if(astGrep.error?.code === 'ENOENT') {
         console.log('SKIP ast-grep checks: ast-grep is not on PATH.');

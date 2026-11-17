@@ -76,6 +76,49 @@ export const bunTest = {
     }],
 };
 
+// The resolver is addressed by absolute path (eslint-module-utils accepts one), so a strict installer cannot lose it.
+const typescriptResolver = require.resolve('eslint-import-resolver-typescript');
+const resolverSetting = project => ({ [typescriptResolver]: { alwaysTryTypes: true, project } });
+
+/**
+ * Optional architecture rules from eslint-plugin-boundaries v7, with no project policy: the jsPlugin and the
+ * TypeScript import resolver setting it needs. Most projects use `defineBoundaries`, which adds the layers and
+ * the dependency policy. `settings` do not inherit through `extends`: merge them at the consumer root.
+ */
+export const boundaries = {
+    jsPlugins: [jsPlugin('boundaries', 'eslint-plugin-boundaries')],
+    settings: { 'import/resolver': resolverSetting('./tsconfig.json') },
+};
+
+/**
+ * Build the project's boundaries add-on. Extend the result and merge its `settings` at the consumer root:
+ * `{ extends: [config, architecture], settings: { ...root.settings, ...architecture.settings } }`.
+ * Run Oxlint from the repo root: the rule resolves `elements` globs against the working directory.
+ *
+ * @param {object} options
+ * @param {object[]} options.elements `boundaries/elements`: the layers, as `{ type, pattern }` folder descriptors.
+ * @param {object} options.dependencies Options of the `boundaries/dependencies` rule (`default`, `policies`).
+ * @param {string[]} options.files Globs of the files the rule runs on (an Oxlint override).
+ * @param {object[]} [options.fileCategories] `boundaries/files`: single-file categories such as an entry point.
+ * @param {string[]} [options.ignore] `boundaries/ignore`: globs the rule skips (tests, usually).
+ * @param {string} [options.tsconfig] tsconfig the import resolver reads, relative to the working directory.
+ * @param {'error'|'warn'} [options.severity] Severity of `boundaries/dependencies`.
+ */
+export function defineBoundaries({ elements, dependencies, files, fileCategories, ignore, tsconfig = './tsconfig.json', severity = 'error' }) {
+    const missing = Object.entries({ elements, dependencies, files }).filter(([, value]) => value === undefined).map(([name]) => name);
+    if(missing.length > 0) { throw new TypeError(`defineBoundaries requires ${missing.join(', ')}`); }
+    return {
+        jsPlugins: boundaries.jsPlugins,
+        settings: {
+            'import/resolver': resolverSetting(tsconfig),
+            'boundaries/elements': elements,
+            ...(fileCategories === undefined ? {} : { 'boundaries/files': fileCategories }),
+            ...(ignore === undefined ? {} : { 'boundaries/ignore': ignore }),
+        },
+        overrides: [{ files, rules: { 'boundaries/dependencies': [severity, dependencies] } }],
+    };
+}
+
 export default {
     categories,
     plugins: ['typescript', 'unicorn', 'import', 'node', 'promise', 'oxc'],

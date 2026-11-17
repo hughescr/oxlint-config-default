@@ -48,7 +48,7 @@ Oxlint 1.94.0 does **not** inherit some fields from an extended config object. T
 | --- | --- | --- |
 | `env` (root) | no | Without it `process` in an `.mjs` file is a false `no-undef`. The default sets `env` inside an `overrides` entry, which **is** inherited, so extending the default alone is enough. `root.env` carries the same value for the consumer root. |
 | `globals` (root) | no | None shipped. Put project globals in an `overrides` entry (inherited) or at your root. |
-| `settings` | no | `bunTest.settings` (`jest.globalPackage = 'bun:test'`) and module-boundaries settings must be set at the consumer root: `settings: { ...root.settings, ...bunTest.settings }`. `root.settings` is `{}` today and reserved for future base settings, so spreading it keeps consumers forward compatible. |
+| `settings` | no | `bunTest.settings` (`jest.globalPackage = 'bun:test'`) and the `boundaries` add-on's settings must be set at the consumer root: `settings: { ...root.settings, ...bunTest.settings, ...architecture.settings }`. `root.settings` is `{}` today and reserved for future base settings, so spreading it keeps consumers forward compatible. |
 | `ignorePatterns` | no | None shipped; set your own (`node_modules/`, `dist/`) at the root. |
 | `options` | **yes**, field by field (verified: `typeAware`, `reportUnusedDisableDirectives`, `maxWarnings`); the consumer's own value wins | `typeAware: true` and `reportUnusedDisableDirectives: 'warn'` are set here. |
 | `env`/`globals` inside `overrides` | yes | Used for `env` above. |
@@ -56,10 +56,22 @@ Oxlint 1.94.0 does **not** inherit some fields from an extended config object. T
 
 `root` is `{ env: { builtin: true, node: true, es2024: true }, settings: {} }`.
 
-Keep JSON linting on ESLint
---------------------------
+Linting package.json
+--------------------
 
-Oxlint does not lint `package.json`. Continue running ESLint with the existing `@hughescr/eslint-config-default` for that file. No package-json plugin is shipped here.
+Oxlint does not lint JSON, so `package.json` stays on ESLint. The `package-json` subpath is a minimal ESLint flat config that loads only [eslint-plugin-package-json](https://github.com/JoshuaKGoldberg/eslint-plugin-package-json) (its `recommended` set: required fields, value validity, alphabetical `sort-collections`, `unique-dependencies`, `specify-peers-locally` and the tidiness rules; `strict` is irrelevant here). It does not load `@hughescr/eslint-config-default`, so the step takes about 0.1 s instead of 0.5 s. Re-export it from a config file of your own (here `eslint.package-json.config.mjs`) and run ESLint on `package.json` alone:
+
+```js
+// eslint.package-json.config.mjs
+export { default } from '@hughescr/oxlint-config-default/package-json';
+```
+
+```bash
+bun add -D eslint            # the runner; this package depends on eslint but a transitive install does not guarantee a bin in your project
+eslint -c eslint.package-json.config.mjs package.json        # add --fix for sort-collections, repository-shorthand, require-type
+```
+
+Options are the plugin's defaults: `require-attribution` ignores private packages, `no-empty-fields` allows an empty `files`, `repository-shorthand` wants the object form, `sort-collections` covers `config`, `dependencies`, `devDependencies`, `exports`, `optionalDependencies`, `overrides`, `peerDependencies`, `peerDependenciesMeta` and `scripts`. Top-level key order is not enforced (`order-properties` is not in the recommended set).
 
 Optional exports
 ----------------
@@ -211,6 +223,38 @@ export default defineConfig({
 
 The wrapper supplies syntax parsing and TS module resolution, not a type checker. It defaults to `tsconfig.json` relative to the lint process cwd. No project-specific module policies are imposed by this package.
 
+### `boundaries` and `defineBoundaries`
+
+Optional architecture rules ([eslint-plugin-boundaries](https://www.jsboundaries.dev/) v7, `boundaries/dependencies`: which layer may import which). The package ships the plugin as a jsPlugin (absolute specifier) and the TypeScript import resolver setting it needs (`eslint-import-resolver-typescript`, also a dependency of this package, addressed by absolute path), and no project policy. The bare `boundaries` export is exactly that (`jsPlugins` plus `settings`). Projects normally call `defineBoundaries`, which adds the layer list and the dependency policy once and returns an extendable add-on:
+
+```ts
+import config, { bunTest, defineBoundaries, root } from '@hughescr/oxlint-config-default';
+import { defineConfig } from 'oxlint';
+
+const architecture = defineBoundaries({
+    files: ['src/**/*.ts'],                                   // where the rule runs (an Oxlint override)
+    elements: [                                               // boundaries/elements: the layers
+        { type: 'utils', pattern: 'src/utils/**' },
+        { type: 'agent', pattern: 'src/agent/**' },
+    ],
+    dependencies: {                                           // options of boundaries/dependencies
+        default: 'disallow',
+        policies: [{ from: { element: { type: 'agent' } }, allow: { to: { element: { type: ['utils'] } } } }],
+    },
+    // optional: fileCategories (boundaries/files), ignore (boundaries/ignore), tsconfig ('./tsconfig.json'), severity ('error')
+});
+
+export default defineConfig({
+    ...root,
+    extends: [config, bunTest, architecture],
+    settings: { ...root.settings, ...bunTest.settings, ...architecture.settings },   // settings never inherit: merge at the root
+});
+```
+
+`architecture` is `{ jsPlugins, settings, overrides }`: the plugin, the settings (`import/resolver`, `boundaries/elements`, and `boundaries/files` / `boundaries/ignore` when given) and one override that runs `boundaries/dependencies` on `files` at the given severity. Because Oxlint does not inherit `settings` through `extends` (see [Root-only fields](#root-only-fields)), **omitting `...architecture.settings` at the root silences the rule** (the plugin only warns that no element descriptors were provided). `defineBoundaries` throws if `elements`, `dependencies` or `files` is missing. The policy shape is the plugin's own; see its documentation for `policies`, selectors and `fileInternalPath`.
+
+Known constraint: the rule resolves the `elements` globs and the resolver's `tsconfig` against the **working directory**, so run Oxlint from the repo root (`node node_modules/oxlint/bin/oxlint ...`), never from a subfolder. Violations are suppressed with `// eslint-disable-next-line boundaries/dependencies -- reason`, and `reportUnusedDisableDirectives` reports one that is no longer needed.
+
 Disable comments and ast-grep
 ----------------------------
 
@@ -342,7 +386,7 @@ sonarjs/prefer-read-only-props
 sonarjs/no-async-constructor
 ```
 
-Some have native, regexp, or compiler overlap; none is falsely enabled as though full typed coverage survived. Beyond those, the SonarJS rules that earlier versions of this package enabled and that now sit in no default are exactly the ones in the opt-in groups and the tables above. Package-json's 53 rules remain on ESLint rather than being reproduced here.
+Some have native, regexp, or compiler overlap; none is falsely enabled as though full typed coverage survived. Beyond those, the SonarJS rules that earlier versions of this package enabled and that now sit in no default are exactly the ones in the opt-in groups and the tables above. `package.json` is linted by ESLint through the `package-json` subpath, not reproduced in Oxlint.
 
 Development
 -----------
@@ -354,7 +398,7 @@ bun run lint
 bun pm pack --dry-run
 ```
 
-Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export, a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not; the nine generic bans are scanned through a real `ruleDirs` sgconfig in every conventional test and source location, for each TypeScript, JavaScript and TSX extension, with exact matched lines and messages). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. There is no build, standalone typecheck, or mutation-test setup in this plain-ESM package.
+Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export (including a two-layer `boundaries` project, one forbidden and one allowed import, run in the repeated multi-file run, and the `package-json` ESLint config against good, bad, private and duplicate-key manifests), a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not; the nine generic bans are scanned through a real `ruleDirs` sgconfig in every conventional test and source location, for each TypeScript, JavaScript and TSX extension, with exact matched lines and messages). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. There is no build, standalone typecheck, or mutation-test setup in this plain-ESM package.
 
 Releases
 --------

@@ -9,9 +9,13 @@
   "license": "BSD-3-Clause",
   "author": "Craig Hughes <craig.npm@rungie.com>",
   "type": "module",
-  "exports": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./package-json": "./package-json.mjs"
+  },
   "files": [
     "index.mjs",
+    "package-json.mjs",
     "rules.mjs",
     "plugins",
     "ast-grep"
@@ -19,7 +23,7 @@
   "sideEffects": false,
   "scripts": {
     "test": "bun test/self-check.mjs",
-    "lint": "node node_modules/oxlint/bin/oxlint -c oxlint.config.ts --deny-warnings index.mjs rules.mjs plugins test/self-check.mjs",
+    "lint": "node node_modules/oxlint/bin/oxlint -c oxlint.config.ts --deny-warnings index.mjs package-json.mjs rules.mjs plugins test/self-check.mjs",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge main"
   },
   "peerDependencies": {
@@ -33,11 +37,14 @@
     "@hughescr/eslint-plugin-test-hygiene": "^1.0.0",
     "@stylistic/eslint-plugin": "^5.10.0",
     "eslint": "^10.2.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.1",
     "eslint-plugin-import-x": "^4.16.2",
     "eslint-plugin-jest": "^29.15.0",
     "eslint-plugin-lodash": "^8.0.0",
     "eslint-plugin-lodash-es": "^1.2.1",
     "eslint-plugin-n": "^17.24.0",
+    "eslint-plugin-package-json": "^1.14.0",
     "eslint-plugin-regexp": "^3.1.0",
     "eslint-plugin-sonarjs": "4.2.2",
     "eslint-plugin-unicorn": "^64.0.0",
