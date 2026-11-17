@@ -1,6 +1,6 @@
 {
   "name": "@hughescr/oxlint-config-default",
-  "version": "0.0.0",
+  "version": "0.9.0",
   "description": "Shared explicit-rule Oxlint config for JavaScript and TypeScript",
   "repository": {
     "type": "git",
