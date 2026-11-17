@@ -1,7 +1,7 @@
 @hughescr/oxlint-config-default
 ===============================
 
-An explicit-rule Oxlint base for JavaScript and TypeScript, ported from `@hughescr/eslint-config-default` 6.0.1. Plain JavaScript ESM, no build step, BSD-3-Clause. All Oxlint categories are off: only listed rules run. Oxlint and its type engine are consumer-owned peers.
+An explicit-rule Oxlint base for JavaScript and TypeScript, ported from `@hughescr/eslint-config-default` 6.0.1. Plain JavaScript ESM with TypeScript declarations generated at pack time, BSD-3-Clause. All Oxlint categories are off: only listed rules run. Oxlint and its type engine are consumer-owned peers.
 
 Installation and usage
 ----------------------
@@ -9,6 +9,8 @@ Installation and usage
 ```bash
 bun add -D @hughescr/oxlint-config-default oxlint@1.94.0 tsrs@0.25.0-ts7.1.0-beta
 ```
+
+Both entry points (`@hughescr/oxlint-config-default` and `@hughescr/oxlint-config-default/package-json`) ship generated `.d.mts` declarations, selected by their `exports.types` conditions. Consumers do not build this package.
 
 The install command above is the normal route. For local development of this package against a consumer, run `bun link` in this package and `bun link @hughescr/oxlint-config-default` in the consumer, or use a `file:` dependency. Keep the prerelease tsrs version pinned exactly.
 
@@ -398,12 +400,13 @@ Development
 
 ```bash
 bun install
+bun run build:types # also runs automatically via prepack
 bun run test
 bun run lint
 bun pm pack --dry-run
 ```
 
-Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export (including a two-layer `boundaries` project, one forbidden and one allowed import, run in the repeated multi-file run, and the `package-json` ESLint config against good, bad, private and duplicate-key manifests), a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not; the nine generic bans are scanned through a real `ruleDirs` sgconfig in every conventional test and source location, for each TypeScript, JavaScript and TSX extension, with exact matched lines and messages). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. There is no build, standalone typecheck, or mutation-test setup in this plain-ESM package.
+Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export (including a two-layer `boundaries` project, one forbidden and one allowed import, run in the repeated multi-file run, and the `package-json` ESLint config against good, bad, private and duplicate-key manifests), a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not; the nine generic bans are scanned through a real `ruleDirs` sgconfig in every conventional test and source location, for each TypeScript, JavaScript and TSX extension, with exact matched lines and messages). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. The suite also packs the package and installs its payload as a real directory (not a symlink) in a second temporary consumer: the README config plus `defineBoundaries` must have no unsafe type-aware findings, a deliberate unsafe sentinel must be reported, consumer TypeScript checks must pass (including negative cases), and packed declarations must match runtime exports. `bun run build:types` uses tsrs declaration-only emit from the `.mjs` sources and their JSDoc via `tsconfig.types.json`. Generated `.d.mts` files are git-ignored, never hand-written or committed. JavaScript source checking is not enabled; there is no mutation-test setup.
 
 Releases
 --------
@@ -416,4 +419,4 @@ git push github main develop --tags
 npm publish
 ```
 
-`postversion` already commits package.json, starts and finishes the git-flow release, returns to `develop`, and merges `main`. The subsequent push is explicit. `npm publish` is **manual**, asks for web authorisation, and is not part of a script. Public npm access is declared in package.json. Do not run these commands merely to test the package. No version bump, tag, commit, push, global link, or publish is needed for local development.
+`postversion` already commits package.json, starts and finishes the git-flow release, returns to `develop`, and merges `main`. The subsequent push is explicit. `npm publish` is **manual**, asks for web authorisation, and is not part of a script. Both `bun pm pack` and `npm publish` run `prepack` to regenerate declarations from source; the hook invokes tsrs through Node and does not require Bun on the npm publisher's PATH. Install development dependencies before packing or publishing. Public npm access is declared in package.json. Do not run these commands merely to test the package. No version bump, tag, commit, push, global link, or publish is needed for local development.

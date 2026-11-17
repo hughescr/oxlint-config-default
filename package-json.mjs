@@ -8,5 +8,7 @@ import { configs } from 'eslint-plugin-package-json';
  *     export { default } from '@hughescr/oxlint-config-default/package-json';
  *
  * Nothing else is loaded, so the step takes about a tenth of a second.
+ * @type {import('eslint').Linter.Config[]}
  */
-export default [configs.recommended];
+const packageJson = [configs.recommended];
+export default packageJson;

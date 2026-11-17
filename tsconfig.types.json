@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "declaration": true,
+        "emitDeclarationOnly": true,
+        "noEmitOnError": true,
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "target": "ESNext",
+        "rootDir": ".",
+        "outDir": ".",
+        "skipLibCheck": true
+    },
+    "files": ["index.mjs", "package-json.mjs"]
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -296,6 +296,140 @@ function checkSonarContract() {
     }
 }
 checkSonarContract();
+
+const installedPackage = '@hughescr/oxlint-config-default';
+/** Names a declaration file exports (`export const|function|let|var NAME`, `export default`, `export { a, b }`). */
+function declaredExports(text) {
+    const names = new Set();
+    for (const match of text.matchAll(/^export\s+(?:declare\s+)?(?:const|let|var|function|class)\s+([\w$]+)/gmu)) { names.add(match[1]); }
+    for (const match of text.matchAll(/^export\s*\{([^}]*)\}/gmu)) {
+        for (const part of match[1].split(',')) {
+            const name = part.trim().split(/\s+as\s+/u).pop();
+            if (name) { names.add(name); }
+        }
+    }
+    if (/^export\s+default\s/mu.test(text)) { names.add('default'); }
+    return names;
+}
+/**
+ * Types ship with the package: a consumer in which the package is a REAL directory under node_modules (a
+ * registry install), not a symlink. Through a symlink the TS engine reads the sibling JS source and infers its
+ * types, which hides a package that was published without declarations (0.9.0). Type-aware linting of the
+ * README's oxlint.config.ts must produce no `typescript/no-unsafe-*` findings, and the same file must typecheck.
+ */
+async function checkRealInstallTypes() {
+    const typed = mkdtempSync(join(tmpdir(), 'oxlint-config-real-install-'));
+    try {
+        const installDir = join(typed, 'node_modules', installedPackage);
+        mkdirSync(installDir, { recursive: true });
+        if(process.env.TEST_PACKAGE_ROOT) {
+            // Already an unpacked tarball layout: copy it (a real directory, never a symlink).
+            cpSync(packageRoot, installDir, { recursive: true, filter: source => !source.split('/').includes('node_modules') });
+        } else {
+            const staging = mkdtempSync(join(tmpdir(), 'oxlint-config-pack-'));
+            try {
+                const pack = spawnSync('bun', ['pm', 'pack', '--destination', staging, '--quiet'], { cwd: root, encoding: 'utf8' });
+                assert.ifError(pack.error);
+                assert.equal(pack.status, 0, pack.stdout + pack.stderr);
+                const [tarball] = readdirSync(staging).filter(name => name.endsWith('.tgz'));
+                assert.ok(tarball, `bun pm pack produced no tarball in ${staging}`);
+                const unpack = spawnSync('tar', ['-xzf', join(staging, tarball), '--strip-components=1', '-C', installDir], { encoding: 'utf8' });
+                assert.ifError(unpack.error);
+                assert.equal(unpack.status, 0, unpack.stderr);
+            } finally { rmSync(staging, { recursive: true, force: true }); }
+        }
+        assert.ok(!lstatSync(installDir).isSymbolicLink(), 'the package under test must be a real directory');
+        // The package's own dependencies resolve from the consumer's node_modules, as after a registry install.
+        const modules = join(typed, 'node_modules');
+        for (const name of readdirSync(join(root, 'node_modules')).filter(entry => entry !== '.bin')) {
+            if(name.startsWith('@')) {
+                mkdirSync(join(modules, name), { recursive: true });
+                for (const inner of readdirSync(join(root, 'node_modules', name))) {
+                    if (name === '@hughescr' && inner === 'oxlint-config-default') { continue; }
+                    symlinkSync(join(root, 'node_modules', name, inner), join(modules, name, inner));
+                }
+            } else { symlinkSync(join(root, 'node_modules', name), join(modules, name)); }
+        }
+        mkdirSync(join(modules, '.bin'));
+        symlinkSync(join(root, 'node_modules/tsrs/bin/tsrs-lint'), join(modules, '.bin/tsrs-lint'));
+        const write = (name, text) => { mkdirSync(join(typed, name, '..'), { recursive: true }); writeFileSync(join(typed, name), text); };
+        write('package.json', JSON.stringify({ name: 'real-install-consumer', type: 'module', private: true }));
+        write('tsconfig.json', JSON.stringify({ compilerOptions: { strict: true, noEmit: true, target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', types: [], skipLibCheck: false }, include: ['*.ts'] }));
+        // The README example plus defineBoundaries, with every settings merge the README documents.
+        write('oxlint.config.ts', `import config, { bunTest, defineBoundaries, lodash, root } from '${installedPackage}';
+import { defineConfig } from 'oxlint';
+
+const architecture = defineBoundaries({
+    files: ['src/**/*.ts'],
+    elements: [
+        { type: 'utils', pattern: 'src/utils/**' },
+        { type: 'agent', pattern: 'src/agent/**' },
+    ],
+    dependencies: {
+        default: 'disallow',
+        policies: [{ from: { element: { type: 'agent' } }, allow: { to: { element: { type: ['utils'] } } } }],
+    },
+    ignore: ['**/*.test.ts'],
+});
+
+export default defineConfig({
+    ...root,
+    extends: [config, lodash, bunTest, architecture],
+    settings: { ...root.settings, ...bunTest.settings, ...architecture.settings },
+});
+`);
+        // Negative type checks: the declarations must reject misuse, not just accept the happy path.
+        write('misuse.ts', `import { defineBoundaries } from '${installedPackage}';
+// @ts-expect-error missing required options
+defineBoundaries({});
+// @ts-expect-error severity is 'error' | 'warn'
+defineBoundaries({ elements: [], dependencies: {}, files: [], severity: 'fatal' });
+// @ts-expect-error there is no such export
+import { notAnExport } from '${installedPackage}';
+export { notAnExport };
+`);
+        // Vacuity guard: the same engine must flag a genuinely unsafe assignment in this consumer.
+        write('unsafe.ts', 'declare const loose: any;\nexport const strict: number = loose;\n');
+        write('eslint.package-json.config.mjs', `export { default } from '${installedPackage}/package-json';\n`);
+        write('eslint-config.ts', `import packageJson from '${installedPackage}/package-json';
+import type { Linter } from 'eslint';
+export const asFlatConfig: Linter.Config[] = packageJson;
+`);
+
+        const run = spawnSync('node', [cli, '-c', 'oxlint.config.ts', '--format', 'json', 'oxlint.config.ts', 'unsafe.ts'], {
+            cwd: typed, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
+            env: { ...process.env, PATH: `${join(modules, '.bin')}:${process.env.PATH}` },
+        });
+        assert.ifError(run.error);
+        assert.doesNotMatch(run.stdout + run.stderr, /Error running JS plugin|Failed to load|Failed to parse (?:oxlint )?configuration/iu);
+        let report;
+        try { report = JSON.parse(run.stdout); } catch { assert.fail(run.stdout + run.stderr); }
+        const unsafeOn = file => report.diagnostics.filter(diagnostic => diagnostic.filename.endsWith(file) && diagnostic.code.startsWith('typescript(no-unsafe-'));
+        assert.ok(unsafeOn('unsafe.ts').length > 0, `the type-aware engine must run in the real-install consumer\n${run.stdout}${run.stderr}`);
+        assert.deepEqual(unsafeOn('oxlint.config.ts').map(diagnostic => `${diagnostic.code} ${diagnostic.message}`), [], 'imports from the installed package must not be typed any (no declaration files shipped?)');
+
+        const tsc = spawnSync('node', [join(root, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json'], { cwd: typed, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+        assert.ifError(tsc.error);
+        assert.equal(tsc.status, 0, `the declarations must typecheck a consumer config and reject misuse:\n${tsc.stdout}${tsc.stderr}`);
+        for (const declarationFile of ['index.d.mts', 'package-json.d.mts']) { assert.ok(existsSync(join(installDir, declarationFile)), `${declarationFile} must be in the packed files`); }
+        await checkDeclarationParity(installDir);
+        console.log('Real-install type checks passed (type-aware lint, tsc, packed declarations and export parity).');
+    } finally { rmSync(typed, { recursive: true, force: true }); }
+}
+/** Declaration/runtime parity: every runtime export of each entry point is declared (and nothing else), and package.json wires and packs the declarations. */
+async function checkDeclarationParity(installDir) {
+    const manifest = JSON.parse(readFileSync(join(installDir, 'package.json'), 'utf8'));
+    const entries = [['.', 'index.mjs', 'index.d.mts'], ['./package-json', 'package-json.mjs', 'package-json.d.mts']];
+    for (const [subpath, runtimeFile, declarationFile] of entries) {
+        assert.deepEqual(manifest.exports[subpath], { types: `./${declarationFile}`, default: `./${runtimeFile}` }, `package.json exports["${subpath}"] must pair the runtime file with its declaration file (types condition first)`);
+        assert.ok(manifest.files.includes(declarationFile), `package.json files must list ${declarationFile}`);
+        const declared = declaredExports(readFileSync(join(installDir, declarationFile), 'utf8'));
+        const loaded = await import(pathToFileURL(join(installDir, runtimeFile)).href);
+        const runtimeNames = Object.keys(loaded);
+        for (const name of runtimeNames) { assert.ok(declared.has(name), `${declarationFile} does not declare runtime export ${name}`); }
+        for (const name of declared) { assert.ok(runtimeNames.includes(name), `${declarationFile} declares ${name}, which ${runtimeFile} does not export`); }
+    }
+}
 assert.ok(pkg.default.categories && Object.values(pkg.default.categories).every(level => level === 'off'));
 assert.deepEqual(pkg.root.env, { builtin: true, node: true, es2024: true });
 assert.deepEqual(pkg.root.settings, {});
@@ -707,6 +841,7 @@ ${architectureSource}export default { categories: { correctness: 'off' }, extend
         }
         console.log('ast-grep generic ban checks passed (TypeScript, JavaScript, TSX; test and source scoping).');
     }
+    await checkRealInstallTypes();
     console.log(`Consumer integration passed (${((performance.now() - started) / 1000).toFixed(2)}s).`);
 } finally {
     if(process.env.KEEP_CONSUMER) { console.log(consumer); } else { rmSync(consumer, { recursive: true, force: true }); }

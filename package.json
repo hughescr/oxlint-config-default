@@ -10,19 +10,30 @@
   "author": "Craig Hughes <craig.npm@rungie.com>",
   "type": "module",
   "exports": {
-    ".": "./index.mjs",
-    "./package-json": "./package-json.mjs"
+    ".": {
+      "types": "./index.d.mts",
+      "default": "./index.mjs"
+    },
+    "./package-json": {
+      "types": "./package-json.d.mts",
+      "default": "./package-json.mjs"
+    }
   },
   "files": [
+    "index.d.mts",
     "index.mjs",
+    "package-json.d.mts",
     "package-json.mjs",
     "rules.mjs",
+    "rules.d.mts",
     "plugins",
     "ast-grep"
   ],
   "sideEffects": false,
   "scripts": {
     "test": "bun test/self-check.mjs",
+    "build:types": "node node_modules/tsrs/bin/tsrs -p tsconfig.types.json",
+    "prepack": "node node_modules/tsrs/bin/tsrs -p tsconfig.types.json",
     "lint": "node node_modules/oxlint/bin/oxlint -c oxlint.config.ts --deny-warnings index.mjs package-json.mjs rules.mjs plugins test/self-check.mjs",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge main"
   },
