@@ -10,7 +10,7 @@ Installation and usage
 bun add -D @hughescr/oxlint-config-default oxlint@1.94.0 tsrs@0.25.0-ts7.1.0-beta
 ```
 
-The package is currently unreleased (`0.0.0`). For local development, the owner can run `bun link` in this package and `bun link @hughescr/oxlint-config-default` in the consumer. Alternatively use a `file:` dependency. Keep the prerelease tsrs version pinned exactly.
+The install command above is the normal route. For local development of this package against a consumer, run `bun link` in this package and `bun link @hughescr/oxlint-config-default` in the consumer, or use a `file:` dependency. Keep the prerelease tsrs version pinned exactly.
 
 Create `oxlint.config.ts` in the consumer root. **Spread `root` at the root and merge `root.settings` with `bunTest.settings`**; Oxlint does not inherit those fields through `extends` (see [Root-only fields](#root-only-fields)):
 

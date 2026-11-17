@@ -40,7 +40,7 @@ Run Oxlint under **Node**, including subprocesses in tests: `node node_modules/o
 
 ## Git and releases
 
-Work on `develop`; PRs target `develop`. `main` holds releases. Git-flow settings and the existing `postversion` script mirror the sibling `eslint-config-default`, including unprefixed version tags. Version remains `0.0.0` until the owner releases it.
+Work on `develop`; PRs target `develop`. `main` holds releases. Git-flow settings and the existing `postversion` script mirror the sibling `eslint-config-default`, including unprefixed version tags.
 
 The owner runs `bun pm version --no-git-tag-version <patch|minor|major>`, then `git push github main develop --tags`, then manual `npm publish` (only with explicit release authorization):
 
