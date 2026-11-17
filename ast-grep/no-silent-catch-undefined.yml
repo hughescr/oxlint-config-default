@@ -1,0 +1,72 @@
+id: no-silent-catch-undefined
+language: typescript
+severity: error
+message: "Silent .catch(() => undefined) swallows errors. Use .catch((err) => { logger.warn({ err }, '...'); }) instead."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector
+  CallExpression[callee.property.name='catch'] > ArrowFunctionExpression > Identifier.body[name='undefined'].
+  The reported node is the `undefined` body identifier. Non-test source files only.
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: undefined
+  inside:
+    field: body
+    kind: arrow_function
+    inside:
+      kind: arguments
+      inside:
+        kind: call_expression
+        has:
+          field: function
+          kind: member_expression
+          has:
+            field: property
+            regex: '^catch$'
+---
+id: no-silent-catch-undefined-javascript
+language: javascript
+severity: error
+message: "Silent .catch(() => undefined) swallows errors. Use .catch((err) => { logger.warn({ err }, '...'); }) instead."
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: undefined
+  inside:
+    field: body
+    kind: arrow_function
+    inside:
+      kind: arguments
+      inside:
+        kind: call_expression
+        has:
+          field: function
+          kind: member_expression
+          has:
+            field: property
+            regex: '^catch$'
+---
+id: no-silent-catch-undefined-tsx
+language: tsx
+severity: error
+message: "Silent .catch(() => undefined) swallows errors. Use .catch((err) => { logger.warn({ err }, '...'); }) instead."
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: undefined
+  inside:
+    field: body
+    kind: arrow_function
+    inside:
+      kind: arguments
+      inside:
+        kind: call_expression
+        has:
+          field: function
+          kind: member_expression
+          has:
+            field: property
+            regex: '^catch$'

@@ -1,0 +1,44 @@
+id: no-test-queue-microtask
+language: typescript
+severity: error
+message: "Don't use queueMicrotask in tests — use await Promise.resolve() for microtask flushing."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector CallExpression[callee.name='queueMicrotask'].
+  Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^queueMicrotask$'
+---
+id: no-test-queue-microtask-javascript
+language: javascript
+severity: error
+message: "Don't use queueMicrotask in tests — use await Promise.resolve() for microtask flushing."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^queueMicrotask$'
+---
+id: no-test-queue-microtask-tsx
+language: tsx
+severity: error
+message: "Don't use queueMicrotask in tests — use await Promise.resolve() for microtask flushing."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^queueMicrotask$'

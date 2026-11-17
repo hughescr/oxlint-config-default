@@ -1,0 +1,66 @@
+id: no-test-promise-wrapped-set-timeout
+language: typescript
+severity: error
+message: "Don't wrap setTimeout in a Promise in tests — use await Promise.resolve() for microtask flushing or jest.useFakeTimers() + jest.advanceTimersByTime() for real delays."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector
+  NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']
+  (catches new Promise(r => setTimeout(r, N)), the microtask-flush anti-pattern). Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setTimeout$'
+  inside:
+    kind: new_expression
+    stopBy: end
+    has:
+      field: constructor
+      kind: identifier
+      regex: '^Promise$'
+---
+id: no-test-promise-wrapped-set-timeout-javascript
+language: javascript
+severity: error
+message: "Don't wrap setTimeout in a Promise in tests — use await Promise.resolve() for microtask flushing or jest.useFakeTimers() + jest.advanceTimersByTime() for real delays."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setTimeout$'
+  inside:
+    kind: new_expression
+    stopBy: end
+    has:
+      field: constructor
+      kind: identifier
+      regex: '^Promise$'
+---
+id: no-test-promise-wrapped-set-timeout-tsx
+language: tsx
+severity: error
+message: "Don't wrap setTimeout in a Promise in tests — use await Promise.resolve() for microtask flushing or jest.useFakeTimers() + jest.advanceTimersByTime() for real delays."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setTimeout$'
+  inside:
+    kind: new_expression
+    stopBy: end
+    has:
+      field: constructor
+      kind: identifier
+      regex: '^Promise$'

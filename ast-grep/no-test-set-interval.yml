@@ -1,0 +1,44 @@
+id: no-test-set-interval
+language: typescript
+severity: error
+message: "Don't use real setInterval in tests — use jest.useFakeTimers() + jest.advanceTimersByTime()."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector CallExpression[callee.name='setInterval'].
+  Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setInterval$'
+---
+id: no-test-set-interval-javascript
+language: javascript
+severity: error
+message: "Don't use real setInterval in tests — use jest.useFakeTimers() + jest.advanceTimersByTime()."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setInterval$'
+---
+id: no-test-set-interval-tsx
+language: tsx
+severity: error
+message: "Don't use real setInterval in tests — use jest.useFakeTimers() + jest.advanceTimersByTime()."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setInterval$'

@@ -1,0 +1,65 @@
+id: no-test-bun-sleep
+language: typescript
+severity: error
+message: "Don't use real Bun.sleep in tests — use jest.useFakeTimers() + jest.advanceTimersByTime(), await Promise.resolve()/drainMicrotasks() for microtask flushing, or a Promise.withResolvers() gate for deterministic ordering."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector
+  CallExpression[callee.object.name='Bun'][callee.property.name='sleep']. Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has:
+          field: object
+          kind: identifier
+          regex: '^Bun$'
+      - has:
+          field: property
+          regex: '^sleep$'
+---
+id: no-test-bun-sleep-javascript
+language: javascript
+severity: error
+message: "Don't use real Bun.sleep in tests — use jest.useFakeTimers() + jest.advanceTimersByTime(), await Promise.resolve()/drainMicrotasks() for microtask flushing, or a Promise.withResolvers() gate for deterministic ordering."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has:
+          field: object
+          kind: identifier
+          regex: '^Bun$'
+      - has:
+          field: property
+          regex: '^sleep$'
+---
+id: no-test-bun-sleep-tsx
+language: tsx
+severity: error
+message: "Don't use real Bun.sleep in tests — use jest.useFakeTimers() + jest.advanceTimersByTime(), await Promise.resolve()/drainMicrotasks() for microtask flushing, or a Promise.withResolvers() gate for deterministic ordering."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    all:
+      - has:
+          field: object
+          kind: identifier
+          regex: '^Bun$'
+      - has:
+          field: property
+          regex: '^sleep$'

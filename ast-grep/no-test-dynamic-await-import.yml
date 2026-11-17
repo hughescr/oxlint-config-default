@@ -1,0 +1,65 @@
+id: no-test-dynamic-await-import
+language: typescript
+severity: error
+message: "Don't use dynamic await import() in tests — use static imports at file scope and spyOn() to override module exports."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector AwaitExpression > ImportExpression.
+  Dynamic await import() inside test bodies is expensive (~50ms) per invocation. Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: import
+  # ESLint's AST has no parentheses and puts `as`/`satisfies` above the await, so the selector
+  # matched through them; tree-sitter nests the call under them instead. Climb through those wrappers only.
+  inside:
+    kind: await_expression
+    stopBy:
+      not:
+        any:
+          - kind: as_expression
+          - kind: satisfies_expression
+          - kind: parenthesized_expression
+---
+id: no-test-dynamic-await-import-javascript
+language: javascript
+severity: error
+message: "Don't use dynamic await import() in tests — use static imports at file scope and spyOn() to override module exports."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: import
+  inside:
+    kind: await_expression
+    stopBy:
+      not:
+        any:
+          - kind: parenthesized_expression
+---
+id: no-test-dynamic-await-import-tsx
+language: tsx
+severity: error
+message: "Don't use dynamic await import() in tests — use static imports at file scope and spyOn() to override module exports."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: import
+  inside:
+    kind: await_expression
+    stopBy:
+      not:
+        any:
+          - kind: as_expression
+          - kind: satisfies_expression
+          - kind: parenthesized_expression

@@ -82,6 +82,8 @@ The ESLint shared default has no Jest rules. This optional config enables four n
 
 Do not omit the root `settings` (see the usage example above): `jest.globalPackage = 'bun:test'` makes the JS-plugin rules recognize imported Bun test functions. Native rules are `no-commented-out-tests`, `prefer-hooks-in-order` (errors), `prefer-jest-mocked`, `prefer-spy-on` (warnings). JS rules are `expect-expect`, `no-disabled-tests`, `no-done-callback`, `no-duplicate-hooks`, `no-focused-tests`, `no-standalone-expect`, `prefer-hooks-on-top` (errors).
 
+A configuration-only probe on Oxlint 1.94.0 confirms that all seven JS rules fire for `bun:test`, while all seven native counterparts stay silent for the same imports. Native `settings.jest` supports only `version`; `globalPackage`, `globalAliases`, Jest globals/environment and tsconfig aliases do not fix import recognition. Native Vitest also ignores these imports and has no `no-done-callback` counterpart. Keep `eslint-plugin-jest` until native import-source support is available; upstream tracks the missing setting in [oxc-project/oxc#23290](https://github.com/oxc-project/oxc/issues/23290).
+
 ### `sonarjs` (core, in the default) and opt-in groups
 
 SonarJS ships as a small reliable core plus opt-in groups, all loaded through one wrapper. JS plugins receive no TypeScript type information, so rules that are silent without types are never enabled.
@@ -223,19 +225,57 @@ ruleDirs:
   - node_modules/@hughescr/oxlint-config-default/ast-grep
 ```
 
-Then run `ast-grep scan`. Each logical rule includes TypeScript, JavaScript/JSX, and TSX variants (`<id>`, `<id>-javascript`, `<id>-tsx`), severity `error`.
+Then run `ast-grep scan`. Each logical rule includes TypeScript, JavaScript/JSX, and TSX variants (`<id>`, `<id>-javascript`, `<id>-tsx`), severity `error`. Project-specific `no-restricted-syntax` policies (rules that name your own paths, modules or APIs) belong in your own `ruleDirs` entry, not in the core wrapper and not here.
 
 | Rule id | File | Replaces |
 | --- | --- | --- |
 | `eslint-disable-bare` | `eslint-disable-bare.yml` | `eslint-comments/no-unlimited-disable`; rejects bare `eslint-disable*` and `oxlint-disable*` directives |
-| `eslint-disable-needs-description` | `eslint-disable-needs-description.yml` | `eslint-comments/require-description`; rejects directives without ` -- reason` (also native Oxlint directives) |
+| `eslint-disable-needs-description` | `eslint-disable-needs-description.yml` | `eslint-comments/require-description` for disables; rejects disable directives without ` -- reason` (also native Oxlint disables) |
 | `sonar-comma-or-logical-or-case` | `sonar-comma-or-logical-or-case.yml` | `sonarjs/comma-or-logical-or-case` |
 | `sonar-no-collection-size-mischeck` | `sonar-no-collection-size-mischeck.yml` | `sonarjs/no-collection-size-mischeck` |
 | `sonar-no-equals-in-for-termination` | `sonar-no-equals-in-for-termination.yml` | `sonarjs/no-equals-in-for-termination` |
 | `sonar-no-useless-increment` | `sonar-no-useless-increment.yml` | `sonarjs/no-useless-increment` |
 | `sonar-reduce-initial-value` | `sonar-reduce-initial-value.yml` | `sonarjs/reduce-initial-value` |
+| `no-silent-catch-undefined` | `no-silent-catch-undefined.yml` | ESLint `no-restricted-syntax` on `.catch(() => undefined)`; non-test source only |
+| `no-test-set-timeout` | `no-test-set-timeout.yml` | ESLint `no-restricted-syntax` on `setTimeout(...)`; test paths only |
+| `no-test-set-interval` | `no-test-set-interval.yml` | ESLint `no-restricted-syntax` on `setInterval(...)`; test paths only |
+| `no-test-set-immediate` | `no-test-set-immediate.yml` | ESLint `no-restricted-syntax` on `setImmediate(...)`; test paths only |
+| `no-test-queue-microtask` | `no-test-queue-microtask.yml` | ESLint `no-restricted-syntax` on `queueMicrotask(...)`; test paths only |
+| `no-test-process-next-tick` | `no-test-process-next-tick.yml` | ESLint `no-restricted-syntax` on `process.nextTick`; test paths only |
+| `no-test-promise-wrapped-set-timeout` | `no-test-promise-wrapped-set-timeout.yml` | ESLint `no-restricted-syntax` on `setTimeout` inside `new Promise(...)`; test paths only |
+| `no-test-dynamic-await-import` | `no-test-dynamic-await-import.yml` | ESLint `no-restricted-syntax` on `await import(...)` (through `as`, `satisfies` and parentheses); test paths only |
+| `no-test-bun-sleep` | `no-test-bun-sleep.yml` | ESLint `no-restricted-syntax` on `Bun.sleep(...)`; test paths only |
 
-The wrapper handles other eslint-comments checks; its description rule is ESLint-comment-only, so ast-grep is also necessary for native Oxlint directives. Project-specific `no-restricted-syntax` policies belong in ast-grep, not the core wrapper. The `sonar-*` rules are purely syntactic and match without type information; a consumer that only wants the disable-comment checks should copy those two files instead of adding the whole directory.
+The wrapper handles other eslint-comments checks; its description rule is ESLint-comment-only, so ast-grep is also necessary for native Oxlint directives. The `sonar-*` rules are purely syntactic and match without type information; a consumer that only wants the disable-comment checks should copy those two files instead of adding the whole directory.
+
+#### Why eslint-comments is still shipped
+
+Small real scans on Oxlint 1.94.0, with and without the wrapper, establish the following coverage. The old ESLint default enables seven rules; the wrapper ships six because native unused-directive reporting replaces `no-unused-disable`.
+
+| ESLint comments rule | Coverage without the wrapper | Fixture evidence |
+| --- | --- | --- |
+| `no-unused-disable` | `options.reportUnusedDisableDirectives: 'warn'` | An unused `eslint-disable-next-line no-debugger` warns. Native `oxlint-` directives warn too. |
+| `no-unused-enable` | The same native option | An enable for `no-debugger` without an earlier disable warns. |
+| `disable-enable-pair` (`allowWholeFile: true`) | **Not covered** | A disable after an exported declaration, followed by `debugger` and no enable, produces no native diagnostic; the wrapper reports the missing pair. A top-of-file disable is correctly exempt with the wrapper. |
+| `no-duplicate-disable` | **Not covered** | Two region disables of `no-debugger`, followed by `debugger` and a matching enable, produce no native diagnostic; the wrapper reports the duplicate. |
+| `no-unlimited-disable` | `eslint-disable-bare` (ast-grep) | A bare disable with a reason matches. Oxlint can suppress the wrapper's own bare-disable warning, so this ast-grep rule remains necessary. |
+| `require-description` | `eslint-disable-needs-description` for disables only | A disable without a reason matches ast-grep; an enable without a reason does not. The wrapper still checks ESLint enables and other ESLint directives. |
+| `no-use` (only disable/enable forms allowed) | **Not covered** | `/* eslint no-debugger: off -- reason */` and `/* global customGlobal -- reason */` are reported only by the wrapper. |
+| `no-aggregating-enable` | Off in the old default; not a removal gap | Explicitly enabling two rules that were disabled separately produces no diagnostic. A bare enable can instead trigger Oxlint's unused-enable warning; that is not equivalent coverage. |
+| `no-restricted-disable` | Off in the old default; not a removal gap | A reasoned disable of `no-debugger` is allowed. |
+
+The enable-description and `no-use` gaps could be covered cheaply with additional comment-node ast-grep rules. Pairing and duplicate detection require rule-list identity and directive state across comments, including partially re-enabled lists and the top-of-file exemption. A regex over one comment cannot preserve that behaviour; a whole-file regex would also misread strings and comment boundaries. An unclosed scoped disable silently suppresses later checks, so dropping pairing is a significant policy loss. **Keep the plugin, wrapper, dependency and six rules.** Adding duplicate ast-grep checks for the smaller gaps would not remove that blocker.
+
+#### Generic syntax bans
+
+The nine `no-silent-catch-undefined` and `no-test-*` rules are generic `no-restricted-syntax` bans moved here from a consumer, so every consumer that adds the rule directory gets them. They are on by default (severity `error`). Consumers can suppress one site, omit a rule file, or pass `ast-grep scan --off=<id>`; to disable a logical rule for every language, repeat `--off` for `<id>`, `<id>-javascript` and `<id>-tsx`. Their messages recommend fake timers (`jest.useFakeTimers()` + `jest.advanceTimersByTime()`) and `await Promise.resolve()`, so the `no-test-*` set suits Bun/Jest-style test suites; a project with a different test runner should copy only the files it wants.
+
+Scope is built into each rule's own globs, relative to the directory holding `sgconfig.yml` and independent of the consumer's layout:
+
+- **Test paths** (the eight `no-test-*` rules): a `tests`, `test` or `__tests__` directory at any depth (`**/{tests,test,__tests__}/**`) and any `*.test.*` or `*.spec.*` file. Test helpers and fixtures under those directories are included. Directories merely containing the text (`contest/`, `latest/`) are not.
+- **Non-test source** (`no-silent-catch-undefined`): every file of the rule's language *except* those same test paths, anywhere in the project (`src/`, `lib/`, `scripts/`, the root). Keep build output, vendored code and generated files out with `.gitignore` (ast-grep honours it) or the `--globs '!path/**'` option.
+
+Suppress one site with the id in an ast-grep comment, as for any ast-grep rule: `// ast-grep-ignore: no-test-set-immediate -- reason`. The rule ids are the file names without `.yml`, and the variant ids carry a suffix (`-javascript`, `-tsx`), so a suppression in a `.tsx` or `.js` file must name that variant (`// ast-grep-ignore: no-test-set-timeout-tsx -- reason`).
 
 Rule inventory and differences
 ------------------------------
@@ -314,7 +354,7 @@ bun run lint
 bun pm pack --dry-run
 ```
 
-Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export, a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. There is no build, standalone typecheck, or mutation-test setup in this plain-ESM package.
+Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export, a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not; the nine generic bans are scanned through a real `ruleDirs` sgconfig in every conventional test and source location, for each TypeScript, JavaScript and TSX extension, with exact matched lines and messages). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. There is no build, standalone typecheck, or mutation-test setup in this plain-ESM package.
 
 Releases
 --------

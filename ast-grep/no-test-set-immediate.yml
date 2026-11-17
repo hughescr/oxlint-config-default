@@ -1,0 +1,44 @@
+id: no-test-set-immediate
+language: typescript
+severity: error
+message: "Don't use real setImmediate in tests — use await Promise.resolve() for microtask flushing."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector CallExpression[callee.name='setImmediate'].
+  Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setImmediate$'
+---
+id: no-test-set-immediate-javascript
+language: javascript
+severity: error
+message: "Don't use real setImmediate in tests — use await Promise.resolve() for microtask flushing."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setImmediate$'
+---
+id: no-test-set-immediate-tsx
+language: tsx
+severity: error
+message: "Don't use real setImmediate in tests — use await Promise.resolve() for microtask flushing."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setImmediate$'

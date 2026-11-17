@@ -1,0 +1,56 @@
+id: no-test-process-next-tick
+language: typescript
+severity: error
+message: "Don't use process.nextTick in tests — use await Promise.resolve() for microtask flushing."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector
+  MemberExpression[object.name='process'][property.name='nextTick']. Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: member_expression
+  all:
+    - has:
+        field: object
+        kind: identifier
+        regex: '^process$'
+    - has:
+        field: property
+        regex: '^nextTick$'
+---
+id: no-test-process-next-tick-javascript
+language: javascript
+severity: error
+message: "Don't use process.nextTick in tests — use await Promise.resolve() for microtask flushing."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: member_expression
+  all:
+    - has:
+        field: object
+        kind: identifier
+        regex: '^process$'
+    - has:
+        field: property
+        regex: '^nextTick$'
+---
+id: no-test-process-next-tick-tsx
+language: tsx
+severity: error
+message: "Don't use process.nextTick in tests — use await Promise.resolve() for microtask flushing."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: member_expression
+  all:
+    - has:
+        field: object
+        kind: identifier
+        regex: '^process$'
+    - has:
+        field: property
+        regex: '^nextTick$'

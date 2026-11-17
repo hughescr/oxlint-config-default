@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -56,6 +56,146 @@ const sampleGood = types => `export function a(xs${types ? ': number[]' : ''}, m
 export function b(n${types ? ': number' : ''}) { for (let i = 0; i < n; i++) { void i; } }
 export function c(x${types ? ': number' : ''}) { switch (x) { case 1: case 2: return 1; default: return 0; } }
 export function d() { let i = 0; i++; return i; }\n`;
+// Generic syntax bans moved from a consumer. `types` selects TypeScript/TSX or plain JavaScript text; line numbers
+// are identical either way because every JS replacement keeps its TS counterpart's line.
+const banCases = types => {
+    const decl = (ts, js) => (types ? ts : js);
+    const promiseVoid = types ? '<void>' : '';
+    return {
+        'no-silent-catch-undefined': {
+            scope: 'source',
+            message: "Silent .catch(() => undefined) swallows errors. Use .catch((err) => { logger.warn({ err }, '...'); }) instead.",
+            lines: [2, 3, 4, 7],
+            flagged: `${decl('declare const p: Promise<void>;', 'const p = Promise.resolve();')}
+p.catch(() => undefined);
+p.catch((err) => undefined);
+p.then(() => 1).catch(async () => undefined);
+p
+    .catch(() =>
+        undefined);
+`,
+            clean: `${decl('declare const p: Promise<void>;', 'const p = Promise.resolve();')}
+${decl('declare const logger: { warn: (...args: unknown[]) => void };', 'const logger = { warn() {} };')}
+p.catch((err) => { logger.warn({ err }, 'failed'); });
+p.catch(() => null);
+p.catch(() => { return undefined; });
+p.catch(() => void 0);
+p.then(() => undefined);
+p.finally(() => undefined);
+p.then(() => 1, () => undefined);
+`,
+        },
+        'no-test-bun-sleep': {
+            scope: 'test',
+            message: "Don't use real Bun.sleep in tests — use jest.useFakeTimers() + jest.advanceTimersByTime(), await Promise.resolve()/drainMicrotasks() for microtask flushing, or a Promise.withResolvers() gate for deterministic ordering.",
+            lines: [1, 2],
+            flagged: 'await Bun.sleep(10);\nconst p = Bun.sleep(5);\nexport { p };\n',
+            clean: `${decl('declare const other: { sleep: (n: number) => void };', 'const other = { sleep() {} };')}
+other.sleep(1);
+Bun.sleepSync(1);
+const b = Bun.version;
+export { b };
+`,
+        },
+        'no-test-dynamic-await-import': {
+            scope: 'test',
+            message: "Don't use dynamic await import() in tests — use static imports at file scope and spyOn() to override module exports.",
+            lines: [2, 5, 8, 9, 10],
+            flagged: `${decl('declare const spec: string;', 'const spec = "x";')}
+const a = await import('node:path');
+export { a };
+async function load() {
+    return (await import('./x.ts')).default;
+}
+export { load };
+const b = await import(spec)${decl(' as { x: string }', '')};
+const c = await (import('x'));
+const d = await import('y')${decl(' satisfies object', '')};
+`,
+            clean: `import * as path from 'node:path';
+const lazy = import('node:path');
+const wrapped = lazy.then(m => m.sep);
+const all = await Promise.all([import('node:path')]);
+const typed = (import('x'))${decl(' as Promise<unknown>', '')};
+export { path, wrapped, all, typed };
+`,
+        },
+        'no-test-process-next-tick': {
+            scope: 'test',
+            message: "Don't use process.nextTick in tests — use await Promise.resolve() for microtask flushing.",
+            lines: [1, 2],
+            flagged: 'process.nextTick(() => undefined);\nconst tick = process.nextTick;\nexport { tick };\n',
+            clean: `${decl('declare const other: { nextTick: () => void };', 'const other = { nextTick() {} };')}
+other.nextTick();
+const env = process.env;
+export { env };
+`,
+        },
+        'no-test-promise-wrapped-set-timeout': {
+            scope: 'test',
+            message: "Don't wrap setTimeout in a Promise in tests — use await Promise.resolve() for microtask flushing or jest.useFakeTimers() + jest.advanceTimersByTime() for real delays.",
+            lines: [1, 4],
+            flagged: `const a = new Promise${promiseVoid}(resolve => setTimeout(resolve, 10));
+const b = new Promise${promiseVoid}((resolve) => {
+    void 0;
+    setTimeout(() => {
+        resolve();
+    }, 5);
+});
+export { a, b };
+`,
+            clean: `const a = new Promise${promiseVoid}(resolve => resolve());
+const b = new Map();
+export { a, b };
+`,
+        },
+        'no-test-queue-microtask': {
+            scope: 'test',
+            message: "Don't use queueMicrotask in tests — use await Promise.resolve() for microtask flushing.",
+            lines: [1, 2],
+            flagged: 'queueMicrotask(() => undefined);\nqueueMicrotask(() => {\n    void 0;\n});\n',
+            clean: `${decl('declare const obj: { queueMicrotask: () => void };', 'const obj = { queueMicrotask() {} };')}
+obj.queueMicrotask();
+await Promise.resolve();
+`,
+        },
+        'no-test-set-immediate': {
+            scope: 'test',
+            message: "Don't use real setImmediate in tests — use await Promise.resolve() for microtask flushing.",
+            lines: [1, 2],
+            flagged: 'setImmediate(() => undefined);\nconst a = setImmediate(() => {\n    void 0;\n});\nexport { a };\n',
+            clean: `${decl('declare const obj: { setImmediate: () => void };', 'const obj = { setImmediate() {} };')}
+obj.setImmediate();
+clearImmediate(undefined);
+`,
+        },
+        'no-test-set-interval': {
+            scope: 'test',
+            message: "Don't use real setInterval in tests — use jest.useFakeTimers() + jest.advanceTimersByTime().",
+            lines: [1, 3],
+            flagged: 'const a = setInterval(() => undefined, 10);\nclearInterval(a);\nsetInterval(() => {\n    void 0;\n}, 5);\n',
+            clean: `${decl('declare const obj: { setInterval: (n: number) => void };', 'const obj = { setInterval() {} };')}
+obj.setInterval(1);
+clearInterval(undefined);
+`,
+        },
+        'no-test-set-timeout': {
+            scope: 'test',
+            message: "Don't use real setTimeout in tests — use jest.useFakeTimers() + jest.advanceTimersByTime().",
+            lines: [1, 2],
+            flagged: 'setTimeout(() => undefined, 10);\nsetTimeout(() => {\n    void 0;\n}, 0);\n',
+            clean: `${decl('declare const obj: { setTimeout: (n: number) => void };', 'const obj = { setTimeout() {} };')}
+obj.setTimeout(1);
+globalThis.setTimeout(() => undefined, 1);
+const setTimeoutName = 'setTimeout';
+export { setTimeoutName };
+`,
+        },
+    };
+};
+// Conventional test locations: directories named tests/test/__tests__ at any depth and *.test.* / *.spec.* files.
+const testLocations = (id, extension) => [`tests/${id}/flagged.${extension}`, `tests/fixtures/${id}.${extension}`, `test/${id}.${extension}`, `__tests__/${id}.${extension}`, `packages/a/tests/${id}.${extension}`, `src/${id}.test.${extension}`, `src/${id}.spec.${extension}`];
+const sourceLocations = (id, extension) => [`src/${id}/flagged.${extension}`, `lib/${id}.${extension}`, `scripts/${id}.${extension}`, `${id}.${extension}`, `contest/${id}.${extension}`, `latest/${id}.${extension}`];
 const testGlobs = ['**/*.{test,spec}.{js,cjs,mjs,jsx,ts,cts,mts,tsx}'];
 const sonarBlocks = { sonarjs: pkg.sonarjs, sonarjsAws: pkg.sonarjsAws, sonarjsWeb: pkg.sonarjsWeb, sonarjsFrameworks: pkg.sonarjsFrameworks, sonarjsTestTooling: pkg.sonarjsTestTooling, sonarjsStyle: pkg.sonarjsStyle };
 const sonarName = key => (key.startsWith('sonarjs/') ? key.slice('sonarjs/'.length) : undefined);
@@ -418,6 +558,50 @@ export default {
             }
         }
         console.log('ast-grep ported sonarjs checks passed (TypeScript, JavaScript, TSX).');
+        // Generic syntax bans. Scanned through a real ruleDir (sgconfig.yml in a sub-project whose ruleDirs points at the
+        // package's ast-grep directory, as a consumer's does): scoping comes from each rule's own files/ignores globs.
+        put('ban-scan/sgconfig.yml', 'ruleDirs:\n  - ../node_modules/@hughescr/oxlint-config-default/ast-grep\n');
+        const variants = [['ts', '', true], ['mts', '', true], ['cts', '', true], ['js', '-javascript', false], ['mjs', '-javascript', false], ['cjs', '-javascript', false], ['jsx', '-javascript', false], ['tsx', '-tsx', true]];
+        const banIds = Object.keys(banCases(true));
+        assert.equal(banIds.length, 9);
+        const flaggedFiles = new Map();
+        const silentFiles = new Set();
+        for (const [extension, suffix, types] of variants) {
+            for (const [id, ban] of Object.entries(banCases(types))) {
+                const [inScope, outOfScope] = ban.scope === 'test' ? [testLocations, sourceLocations] : [sourceLocations, testLocations];
+                for (const location of inScope(id, extension)) {
+                    put(`ban-scan/${location}`, ban.flagged);
+                    flaggedFiles.set(location, { ruleId: `${id}${suffix}`, ...ban });
+                }
+                for (const location of outOfScope(id, extension)) {
+                    put(`ban-scan/${location}`, ban.flagged);
+                    silentFiles.add(location);
+                }
+                const cleanLocation = ban.scope === 'test' ? `tests/${id}/clean.${extension}` : `src/${id}/clean.${extension}`;
+                put(`ban-scan/${cleanLocation}`, ban.clean);
+                silentFiles.add(cleanLocation);
+            }
+        }
+        const banScan = spawnSync('ast-grep', ['scan', '--json=compact'], { cwd: join(consumer, 'ban-scan'), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+        assert.ifError(banScan.error);
+        assert.equal(banScan.status, 1, `the ban scan must report errors: ${banScan.stderr}`);
+        const banMatches = JSON.parse(banScan.stdout);
+        const isBan = ruleId => banIds.includes(ruleId.replace(/-(?:javascript|tsx)$/u, ''));
+        for (const [location, expected] of flaggedFiles) {
+            const own = banMatches.filter(match => match.file === location && match.ruleId === expected.ruleId);
+            assert.deepEqual(own.map(match => match.range.start.line + 1).toSorted((a, b) => a - b), expected.lines, `${expected.ruleId} at ${location}`);
+            assert.ok(own.every(match => match.message === expected.message), `${expected.ruleId} at ${location}: message`);
+        }
+        for (const match of banMatches.filter(entry => isBan(entry.ruleId))) {
+            assert.ok(!silentFiles.has(match.file), `${match.ruleId} must stay silent at ${match.file}`);
+            assert.ok(flaggedFiles.has(match.file), `${match.ruleId} matched unexpected file ${match.file}`);
+        }
+        // The README names every shipped ast-grep rule file.
+        const astGrepReadme = readFileSync(join(packageRoot, 'README.md'), 'utf8');
+        for (const file of readdirSync(join(packageRoot, 'ast-grep')).filter(name => name.endsWith('.yml'))) {
+            assert.ok(astGrepReadme.includes(`\`${file}\``), `README does not list ast-grep/${file}`);
+        }
+        console.log('ast-grep generic ban checks passed (TypeScript, JavaScript, TSX; test and source scoping).');
     }
     console.log(`Consumer integration passed (${((performance.now() - started) / 1000).toFixed(2)}s).`);
 } finally {

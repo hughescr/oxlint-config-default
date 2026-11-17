@@ -1,0 +1,44 @@
+id: no-test-set-timeout
+language: typescript
+severity: error
+message: "Don't use real setTimeout in tests — use jest.useFakeTimers() + jest.advanceTimersByTime()."
+note: |
+  Generic port of the ESLint `no-restricted-syntax` selector CallExpression[callee.name='setTimeout'].
+  Conventional test paths only.
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setTimeout$'
+---
+id: no-test-set-timeout-javascript
+language: javascript
+severity: error
+message: "Don't use real setTimeout in tests — use jest.useFakeTimers() + jest.advanceTimersByTime()."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setTimeout$'
+---
+id: no-test-set-timeout-tsx
+language: tsx
+severity: error
+message: "Don't use real setTimeout in tests — use jest.useFakeTimers() + jest.advanceTimersByTime()."
+files:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: identifier
+    regex: '^setTimeout$'
