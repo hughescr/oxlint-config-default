@@ -1,0 +1,23 @@
+id: directive-no-enable
+language: typescript
+severity: error
+message: Enable directives are forbidden; use next-line/same-line disables, or a whole-file disable before all code.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-enable(\s|\*/|$)'
+---
+id: directive-no-enable-javascript
+language: javascript
+severity: error
+message: Enable directives are forbidden; use next-line/same-line disables, or a whole-file disable before all code.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-enable(\s|\*/|$)'
+---
+id: directive-no-enable-tsx
+language: tsx
+severity: error
+message: Enable directives are forbidden; use next-line/same-line disables, or a whole-file disable before all code.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-enable(\s|\*/|$)'

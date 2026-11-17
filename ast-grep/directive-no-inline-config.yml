@@ -1,0 +1,23 @@
+id: directive-no-inline-config
+language: typescript
+severity: error
+message: Inline eslint/global/globals/exported/eslint-env configuration is forbidden; put configuration in the project config.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|globals?|exported|eslint-env)(\s|\*/|$)'
+---
+id: directive-no-inline-config-javascript
+language: javascript
+severity: error
+message: Inline eslint/global/globals/exported/eslint-env configuration is forbidden; put configuration in the project config.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|globals?|exported|eslint-env)(\s|\*/|$)'
+---
+id: directive-no-inline-config-tsx
+language: tsx
+severity: error
+message: Inline eslint/global/globals/exported/eslint-env configuration is forbidden; put configuration in the project config.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|globals?|exported|eslint-env)(\s|\*/|$)'

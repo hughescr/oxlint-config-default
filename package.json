@@ -31,7 +31,6 @@
     "tsrs": "*"
   },
   "dependencies": {
-    "@eslint-community/eslint-plugin-eslint-comments": "^4.7.1",
     "@eslint/compat": "^2.0.5",
     "@hughescr/eslint-plugin-module-boundaries": "^1.0.0",
     "@hughescr/eslint-plugin-test-hygiene": "^1.0.0",

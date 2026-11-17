@@ -403,8 +403,6 @@ beforeAll(() => {});\n`);
         'jest(prefer-hooks-in-order)',
     ]) { has(result, code); }
     assert.equal(result.diagnostics.filter(diagnostic => diagnostic.code === 'typescript(require-array-sort-compare)').length, 2);
-    put('comments.ts', '// eslint-enable no-console -- unmatched enable\nexport const answer = 42;\n');
-    has(lint(['comments.ts']), '@eslint-community/eslint-comments(no-unused-enable)');
     put('clean.ts', 'export const answer = 42;\n');
     const clean = lint(['clean.ts'], ['--deny-warnings']);
     assert.equal(clean.status, 0, clean.stdout + clean.stderr);
@@ -611,7 +609,44 @@ ${architectureSource}export default { categories: { correctness: 'off' }, extend
                 assert.equal(JSON.parse(scan.stdout).length, expected, scan.stdout + scan.stderr);
             }
         }
-        console.log('ast-grep directive checks passed (TypeScript, JavaScript, TSX).');
+        // Policy fixtures are real comments, not a whole-file regex: strings/templates must stay inert.
+        // The allowed header consists only of comments, whitespace and an optional hashbang; 'use strict' is code.
+        const directiveCases = {
+            'directive-block-disable-not-at-top': [
+                ['/* eslint-disable no-debugger -- whole file */\ndebugger;\n', []],
+                ['#!/usr/bin/env node\n\n/* licence */\n/** docblock */\n/// <reference path="types.d.ts" />\n/* oxlint-disable no-debugger -- whole file */\ndebugger;\n', []],
+                ['/* licence */\n// another header\n/* eslint-disable no-debugger -- whole file */\n/* oxlint-disable no-console -- whole file */\ndebugger;\n', []],
+                ['import "x";\n/* eslint-disable no-debugger -- late */\ndebugger;\n', [2]],
+                ['function f() {\n/* oxlint-disable no-debugger -- scoped */\ndebugger;\n}\n', [2]],
+                ['"use strict";\n// intervening comment\n/* eslint-disable no-debugger -- late */\ndebugger;\n', [3]],
+                ['export const x = 1;\n// eslint-disable no-debugger -- late line-comment form\ndebugger;\n', [2]],
+                ['// oxlint-disable no-debugger -- whole file\ndebugger;\n', []],
+                ['const x = "/* eslint-disable no-debugger -- inert */";\nconst y = `// oxlint-disable no-debugger -- inert`;\n// eslint-disable-next-line no-debugger -- local\ndebugger; // oxlint-disable-line no-debugger -- local\n', []],
+                ['function f() { /* header-looking comment */\n/* eslint-disable no-debugger -- not a file header */\n}\n', [2]],
+                [';\n/* eslint-disable no-debugger -- empty statement is code */\n', [2]],
+            ],
+            'directive-no-enable': [
+                ['/* eslint-enable no-debugger -- forbidden */\n// oxlint-enable no-debugger -- forbidden\n/* eslint-enable */\n', [1, 2, 3]],
+                ['const x = "/* eslint-enable no-debugger */";\nconst y = `// oxlint-enable no-debugger`;\n// ordinary mention of eslint-enable\n/* eslint-disable-next-line no-debugger -- allowed */\ndebugger;\n', []],
+            ],
+            'directive-no-inline-config': [
+                ['/* eslint no-debugger: off */\n/* global x */\n/* globals x, y */\n/* exported x */\n/* eslint-env node */\n// eslint no-debugger: off\n// global x\n', [1, 2, 3, 4, 5, 6, 7]],
+                ['const x = "/* eslint no-debugger: off */";\nconst y = `/* global x */`;\n/* eslint-disable no-debugger -- allowed */\n// oxlint-disable-next-line no-debugger -- allowed\n// eslint-config is not a directive\n/* globalsAreOrdinaryWords */\n', []],
+            ],
+        };
+        for (const extension of ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs', 'jsx', 'tsx']) {
+            for (const [rule, cases] of Object.entries(directiveCases)) {
+                for (const [index, [text, expectedLines]] of cases.entries()) {
+                    const file = `policy-${rule}-${index}.${extension}`;
+                    put(file, text + (['jsx', 'tsx'].includes(extension) ? 'const element = <div />;\n' : ''));
+                    const scan = spawnSync('ast-grep', ['scan', '--rule', join(packageRoot, 'ast-grep', `${rule}.yml`), '--json=compact', file], { cwd: consumer, encoding: 'utf8' });
+                    assert.ifError(scan.error);
+                    assert.ok(scan.status === 0 || scan.status === 1, scan.stderr);
+                    assert.deepEqual(JSON.parse(scan.stdout).map(match => match.range.start.line + 1).toSorted((a, b) => a - b), expectedLines, `${rule} on ${file}: ${scan.stdout}${scan.stderr}`);
+                }
+            }
+        }
+        console.log('ast-grep directive checks passed (TypeScript, JavaScript/JSX, TSX; header-only disables, no enables/config).');
         // Ported sonarjs rules: the bad sample matches (expected counts), the good sample never does.
         const sonarCases = [['sonar-comma-or-logical-or-case', 2], ['sonar-no-collection-size-mischeck', 3], ['sonar-no-equals-in-for-termination', 2], ['sonar-no-useless-increment', 1], ['sonar-reduce-initial-value', 2]];
         for (const extension of ['ts', 'js', 'tsx']) {

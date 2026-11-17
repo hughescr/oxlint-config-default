@@ -1,0 +1,59 @@
+id: directive-block-disable-not-at-top
+language: typescript
+severity: error
+message: Whole-file disables belong before all code; use disable-next-line or disable-line for local exceptions. Enable directives are forbidden.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(\s|\*/|$)'
+  not:
+    all:
+      - inside:
+          kind: program
+          stopBy: neighbor
+      - not:
+          follows:
+            not:
+              any:
+                - kind: comment
+                - kind: hash_bang_line
+            stopBy: end
+---
+id: directive-block-disable-not-at-top-javascript
+language: javascript
+severity: error
+message: Whole-file disables belong before all code; use disable-next-line or disable-line for local exceptions. Enable directives are forbidden.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(\s|\*/|$)'
+  not:
+    all:
+      - inside:
+          kind: program
+          stopBy: neighbor
+      - not:
+          follows:
+            not:
+              any:
+                - kind: comment
+                - kind: hash_bang_line
+            stopBy: end
+---
+id: directive-block-disable-not-at-top-tsx
+language: tsx
+severity: error
+message: Whole-file disables belong before all code; use disable-next-line or disable-line for local exceptions. Enable directives are forbidden.
+rule:
+  kind: comment
+  regex: '^(//|/\*+)\s*(eslint|oxlint)-disable(\s|\*/|$)'
+  not:
+    all:
+      - inside:
+          kind: program
+          stopBy: neighbor
+      - not:
+          follows:
+            not:
+              any:
+                - kind: comment
+                - kind: hash_bang_line
+            stopBy: end

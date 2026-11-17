@@ -262,7 +262,7 @@ Native and JS plugin names such as `eslint`, `unicorn`, `import`/`import-x`, `n`
 
 All jsPlugin paths are absolute, resolved from this package with `createRequire(import.meta.url).resolve(...)`; they do not depend on plugin packages being hoisted into a consumer's node_modules.
 
-The eslint-comments adapter repairs report locations, but Oxlint can suppress the diagnostics for bare disable directives. The package ships ast-grep rules, to be added to `sgconfig.yml`:
+Directive policy is enforced outside Oxlint, so a disable cannot suppress its own policy diagnostic. Add the package's ast-grep rules to `sgconfig.yml`:
 
 ```yaml
 ruleDirs:
@@ -275,6 +275,9 @@ Then run `ast-grep scan`. Each logical rule includes TypeScript, JavaScript/JSX,
 | --- | --- | --- |
 | `eslint-disable-bare` | `eslint-disable-bare.yml` | `eslint-comments/no-unlimited-disable`; rejects bare `eslint-disable*` and `oxlint-disable*` directives |
 | `eslint-disable-needs-description` | `eslint-disable-needs-description.yml` | `eslint-comments/require-description` for disables; rejects disable directives without ` -- reason` (also native Oxlint disables) |
+| `directive-block-disable-not-at-top` | `directive-block-disable-not-at-top.yml` | Whole-file disables only before all code; no scoped regions to pair |
+| `directive-no-enable` | `directive-no-enable.yml` | Forbids every `eslint-enable` / `oxlint-enable` directive |
+| `directive-no-inline-config` | `directive-no-inline-config.yml` | Forbids `eslint`, `global`, `globals`, `exported`, `eslint-env` inline configuration |
 | `sonar-comma-or-logical-or-case` | `sonar-comma-or-logical-or-case.yml` | `sonarjs/comma-or-logical-or-case` |
 | `sonar-no-collection-size-mischeck` | `sonar-no-collection-size-mischeck.yml` | `sonarjs/no-collection-size-mischeck` |
 | `sonar-no-equals-in-for-termination` | `sonar-no-equals-in-for-termination.yml` | `sonarjs/no-equals-in-for-termination` |
@@ -290,25 +293,28 @@ Then run `ast-grep scan`. Each logical rule includes TypeScript, JavaScript/JSX,
 | `no-test-dynamic-await-import` | `no-test-dynamic-await-import.yml` | ESLint `no-restricted-syntax` on `await import(...)` (through `as`, `satisfies` and parentheses); test paths only |
 | `no-test-bun-sleep` | `no-test-bun-sleep.yml` | ESLint `no-restricted-syntax` on `Bun.sleep(...)`; test paths only |
 
-The wrapper handles other eslint-comments checks; its description rule is ESLint-comment-only, so ast-grep is also necessary for native Oxlint directives. The `sonar-*` rules are purely syntactic and match without type information; a consumer that only wants the disable-comment checks should copy those two files instead of adding the whole directory.
+The `sonar-*` rules are purely syntactic and match without type information. A consumer that only wants directive policy should copy the five directive files (`eslint-disable-*` and `directive-*`) instead of adding the whole directory.
 
-#### Why eslint-comments is still shipped
+#### Directive policy (no eslint-comments plugin)
 
-Small real scans on Oxlint 1.94.0, with and without the wrapper, establish the following coverage. The old ESLint default enables seven rules; the wrapper ships six because native unused-directive reporting replaces `no-unused-disable`.
+- Whole-file `eslint-disable` / `oxlint-disable` comments are allowed only in the file header, before **any code**. A leading shebang, licence/docblock/triple-slash comments and blank lines are fine. Multiple header disables are allowed. `'use strict'`, imports and even empty statements count as code. A comment inside a function or JSX expression is not a file header.
+- Local exceptions use `disable-next-line` or `disable-line`; **enable directives are forbidden everywhere**. There are no scoped regions and no matching halves for later edits to break.
+- Inline `eslint`, `global`, `globals`, `exported` and `eslint-env` config directives are forbidden. The old `no-use` allowed only `eslint-disable`, `eslint-enable`, `eslint-disable-line` and `eslint-disable-next-line`; the new policy additionally removes enables and covers native `oxlint-` disables.
+- Every disable still needs an explicit rule list and a nonempty ` -- reason`.
 
-| ESLint comments rule | Coverage without the wrapper | Fixture evidence |
+All five rules inspect comment AST nodes, not text inside strings/templates. Header checking requires the comment's immediate parent to be the program and permits only comment/hashbang siblings before it. TypeScript, JavaScript/JSX and TSX variants share this policy. Both `/* … */` and `// …` forms are checked: real scans under **Oxlint 1.94.0, Node launcher**, confirm that `// eslint-disable rule` and `// oxlint-disable rule` suppress later findings as region disables, although ESLint ignores the line-comment block form. A consumer can impose stricter path-specific policy (for example, no whole-file disables under `src/`) in its own rule directory; shared-rule globs resolve relative to the consumer's `sgconfig.yml`.
+
+| Old ESLint comments rule | Replacement / policy coverage | Evidence and limitations |
 | --- | --- | --- |
-| `no-unused-disable` | `options.reportUnusedDisableDirectives: 'warn'` | An unused `eslint-disable-next-line no-debugger` warns. Native `oxlint-` directives warn too. |
-| `no-unused-enable` | The same native option | An enable for `no-debugger` without an earlier disable warns. |
-| `disable-enable-pair` (`allowWholeFile: true`) | **Not covered** | A disable after an exported declaration, followed by `debugger` and no enable, produces no native diagnostic; the wrapper reports the missing pair. A top-of-file disable is correctly exempt with the wrapper. |
-| `no-duplicate-disable` | **Not covered** | Two region disables of `no-debugger`, followed by `debugger` and a matching enable, produce no native diagnostic; the wrapper reports the duplicate. |
-| `no-unlimited-disable` | `eslint-disable-bare` (ast-grep) | A bare disable with a reason matches. Oxlint can suppress the wrapper's own bare-disable warning, so this ast-grep rule remains necessary. |
-| `require-description` | `eslint-disable-needs-description` for disables only | A disable without a reason matches ast-grep; an enable without a reason does not. The wrapper still checks ESLint enables and other ESLint directives. |
-| `no-use` (only disable/enable forms allowed) | **Not covered** | `/* eslint no-debugger: off -- reason */` and `/* global customGlobal -- reason */` are reported only by the wrapper. |
-| `no-aggregating-enable` | Off in the old default; not a removal gap | Explicitly enabling two rules that were disabled separately produces no diagnostic. A bare enable can instead trigger Oxlint's unused-enable warning; that is not equivalent coverage. |
-| `no-restricted-disable` | Off in the old default; not a removal gap | A reasoned disable of `no-debugger` is allowed. |
-
-The enable-description and `no-use` gaps could be covered cheaply with additional comment-node ast-grep rules. Pairing and duplicate detection require rule-list identity and directive state across comments, including partially re-enabled lists and the top-of-file exemption. A regex over one comment cannot preserve that behaviour; a whole-file regex would also misread strings and comment boundaries. An unclosed scoped disable silently suppresses later checks, so dropping pairing is a significant policy loss. **Keep the plugin, wrapper, dependency and six rules.** Adding duplicate ast-grep checks for the smaller gaps would not remove that blocker.
+| `no-unused-disable` | Native `options.reportUnusedDisableDirectives: 'warn'` | Unused next-line and native `oxlint-` disables warn. Always pass `--deny-warnings`. |
+| `no-unused-enable` | `directive-no-enable` | All enables are rejected, used or unused. |
+| `disable-enable-pair` (`allowWholeFile: true`) | `directive-block-disable-not-at-top` + `directive-no-enable` | Scoped regions are impossible; header-only whole-file disables need no matching enable. This is a deliberate stricter policy, not a stateful pairing emulation. |
+| `no-duplicate-disable` | **Not exactly replaced** | Scoped duplicate regions are rejected by placement policy, but duplicate header/local disables are not generally detected. Oxlint 1.94.0 does **not** report a next-line disable as unused when the same rule is already disabled for the whole file (verified for both prefixes). No rule-list identity/state emulation is claimed. |
+| `no-unlimited-disable` | `eslint-disable-bare` | Bare ESLint and Oxlint disables are rejected, including those with a reason. |
+| `require-description` | `eslint-disable-needs-description` + bans on enables/config directives | All remaining allowed directive forms are disables and need a reason. |
+| `no-use` | `directive-no-inline-config` + `directive-no-enable` | Inline config is forbidden; only header whole-file and local next-line/same-line disables remain. |
+| `no-aggregating-enable` | Off in the old default; now `directive-no-enable` rejects all enables | No stateful aggregation check is needed. |
+| `no-restricted-disable` | Off in the old default; unchanged | Explicit, reasoned disables are allowed subject to placement policy. |
 
 #### Generic syntax bans
 
@@ -338,10 +344,9 @@ The port uses the effective rule ids and options from the shared ESLint config i
 | sonarjs core (non-test files) | 38 | 38 |
 | regexp | 61 | 61 |
 | @stylistic | 67 | 67 |
-| eslint-comments wrapper | 6 | 6 |
 | test-hygiene | 4 | 4 |
 | module-boundaries wrapper | 2 | 2 |
-| **Total active rules (ordinary source files)** | **457** | **510** |
+| **Total active rules (ordinary source files)** | **451** | **504** |
 
 Test overrides disable 15 rules for TS tests and swap the sonarjs core for its 13 test-file rules; shared JS test relaxations are also applied. Optional lodash adds 23 rules; optional bunTest adds 11; the sonarjs opt-in groups add 17, 28, 16, 14 and 25.
 
@@ -351,7 +356,7 @@ Explicit compatibility differences:
 - The eleven typescript-eslint extension rules use Oxlint core equivalents. JS `dot-notation` uses the ESLint core wrapper; TS uses native `typescript/dot-notation`.
 - `unicorn/numeric-separators-style`: enabled with **Oxlint's preferred behavior**, not ESLint's options.
 - Oxlint rejects the printed options `preserve-caught-error.errorClassNames`, `unicorn/prefer-export-from.ignoreUsedVariables`, and all options for `unicorn/escape-case`, `number-literal-case`, `prefer-add-event-listener`, `prefer-array-find`, `prefer-array-flat`. These use supported options/default behavior instead. Catch-error-name's serialized RegExp options are restored as regex strings.
-- `@eslint-community/eslint-comments/no-unused-disable`: replaced by the consumer's root unused-directive option. Bare directives and description gaps require the bundled ast-grep rules.
+- The eslint-comments plugin is removed. Native unused-directive reporting plus five ast-grep directive rules enforce the stricter header-only/no-enable policy above; duplicate disables are not exactly covered.
 - Generic `n/no-missing-import` and `n/no-unpublished-import`, disabled in the first consumer's local ESLint config, are retained as `n-js/*`. Node resolution may not understand Bun's extensionless TS imports and aliases; the generic ESLint config has the same limitation. Configure or disable these in a Bun consumer; the shared package does not impose a consumer-specific resolver.
 
 The following **27 generic SonarJS rule ids are never enabled** (silent without types, except unsafe `void-use`). On TS files, `deprecation` is replaced by native `typescript/no-deprecated`, and `no-alphabetical-sort` by native `typescript/require-array-sort-compare` with `ignoreStringArrays: false`. Those two replacements preserve typed coverage but do not restore JS-only coverage. The remaining 25 have no full replacement:

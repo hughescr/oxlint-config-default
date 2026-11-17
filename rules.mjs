@@ -170,13 +170,6 @@ export const promise = {
         promise/valid-params promise/prefer-catch`),
     ...errors('promise/no-return-wrap promise/no-new-statics'),
 };
-export const comments = {
-    '@eslint-community/eslint-comments/disable-enable-pair': ['warn', { allowWholeFile: true }],
-    ...warnings(`@eslint-community/eslint-comments/no-duplicate-disable
-        @eslint-community/eslint-comments/no-unlimited-disable @eslint-community/eslint-comments/no-unused-enable
-        @eslint-community/eslint-comments/require-description`),
-    '@eslint-community/eslint-comments/no-use': ['warn', { allow: ['eslint-disable', 'eslint-enable', 'eslint-disable-line', 'eslint-disable-next-line'] }],
-};
 export const regexp = {
     ...warnings(`regexp/confusing-quantifier regexp/match-any regexp/no-dupe-characters-character-class
         regexp/no-empty-alternative regexp/no-empty-group regexp/no-empty-lookarounds-assertion
