@@ -4,14 +4,6 @@ import * as rules from './rules.mjs';
 /**
  * @typedef {import('oxlint').OxlintConfig} Config
  * @typedef {Config & { settings: NonNullable<Config['settings']> }} SettingsConfig
- * @typedef {object} BoundariesOptions
- * @property {object[]} elements `boundaries/elements`: layer descriptors such as `{ type, pattern }`.
- * @property {object} dependencies Options of `boundaries/dependencies` (`default`, `policies`).
- * @property {string[]} files Globs of the files the rule runs on (an Oxlint override).
- * @property {object[]} [fileCategories] `boundaries/files`: single-file categories such as an entry point.
- * @property {string[]} [ignore] `boundaries/ignore`: globs the rule skips (usually tests).
- * @property {string} [tsconfig] Resolver tsconfig, relative to the working directory.
- * @property {'error'|'warn'} [severity] Severity of `boundaries/dependencies`.
  */
 const require = createRequire(import.meta.url);
 const jsPlugin = (name, packageName) => ({ name, specifier: require.resolve(packageName) });
@@ -39,11 +31,14 @@ export const lodash = {
     rules: rules.lodash,
 };
 
-/** Generic barrel rules are included by default. Add no-cross-module-internal with project options.
+/**
+ * Declares the native `@hughescr/oxlint-plugin-module-boundaries` jsPlugin (no TypeScript program, no settings)
+ * and enables its two generic barrel rules, which the default already includes. The two policy rules
+ * (`dependencies`, `no-cross-module-internal`) need a project policy: use `defineBoundaries`.
  * @type {Required<Pick<Config, 'jsPlugins' | 'rules'>>}
  */
 export const moduleBoundaries = {
-    jsPlugins: [jsPlugin('@hughescr/module-boundaries', './plugins/module-boundaries-oxlint.mjs')],
+    jsPlugins: [jsPlugin('@hughescr/module-boundaries', '@hughescr/oxlint-plugin-module-boundaries')],
     rules: rules.moduleBoundaries,
 };
 
@@ -71,43 +66,15 @@ export const bunTest = {
     }],
 };
 
-// The resolver is addressed by absolute path (eslint-module-utils accepts one), so a strict installer cannot lose it.
-const typescriptResolver = require.resolve('eslint-import-resolver-typescript');
-const resolverSetting = project => ({ [typescriptResolver]: { alwaysTryTypes: true, project } });
-
 /**
- * Optional architecture rules from eslint-plugin-boundaries v7, with no project policy: the jsPlugin and the
- * TypeScript import resolver setting it needs. Most projects use `defineBoundaries`, which adds the layers and
- * the dependency policy. `settings` do not inherit through `extends`: merge them at the consumer root.
- * @type {SettingsConfig}
+ * Validates a project's module policy and returns the Oxlint fragment to `extends`: the plugin's jsPlugins entry plus
+ * an override enabling `dependencies` and `no-cross-module-internal` with the policy as rule options (no `settings`,
+ * any working directory). This is `@hughescr/oxlint-plugin-module-boundaries`' own `defineBoundaries`, re-exported so
+ * a policy file imports it from this package: the fragment then registers the same plugin copy, under the same name
+ * and absolute specifier, as the default config. Importing it from a second installed copy of the plugin makes
+ * Oxlint refuse the config ("Plugin name ... is already registered").
  */
-export const boundaries = {
-    jsPlugins: [jsPlugin('boundaries', 'eslint-plugin-boundaries')],
-    settings: { 'import/resolver': resolverSetting('./tsconfig.json') },
-};
-
-/**
- * Build the project's boundaries add-on. Extend the result and merge its `settings` at the consumer root:
- * `{ extends: [config, architecture], settings: { ...root.settings, ...architecture.settings } }`.
- * Run Oxlint from the repo root: the rule resolves `elements` globs against the working directory.
- *
- * @param {BoundariesOptions} options
- * @returns {SettingsConfig} Extend this config and merge its settings at the root.
- */
-export function defineBoundaries({ elements, dependencies, files, fileCategories, ignore, tsconfig = './tsconfig.json', severity = 'error' }) {
-    const missing = Object.entries({ elements, dependencies, files }).filter(([, value]) => value === undefined).map(([name]) => name);
-    if(missing.length > 0) { throw new TypeError(`defineBoundaries requires ${missing.join(', ')}`); }
-    return {
-        jsPlugins: boundaries.jsPlugins,
-        settings: {
-            'import/resolver': resolverSetting(tsconfig),
-            'boundaries/elements': elements,
-            ...(fileCategories === undefined ? {} : { 'boundaries/files': fileCategories }),
-            ...(ignore === undefined ? {} : { 'boundaries/ignore': ignore }),
-        },
-        overrides: [{ files, rules: { 'boundaries/dependencies': [severity, dependencies] } }],
-    };
-}
+export { defineBoundaries } from '@hughescr/oxlint-plugin-module-boundaries';
 
 /** @type {Config} */
 const config = {

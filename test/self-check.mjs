@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, lstatSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -18,6 +18,14 @@ const packageManifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'
 assert.ok(!packageManifest.dependencies['eslint-plugin-sonarjs'], 'SonarJS must not be installed');
 assert.ok(!existsSync(join(packageRoot, 'plugins/sonarjs-oxlint.mjs')), 'SonarJS wrapper must be removed');
 assert.ok(!JSON.stringify(pkg.default).includes('sonarjs'), 'default must not load SonarJS');
+// Module boundaries run natively in Oxlint: one plugin package, no fake TypeScript program, no eslint-plugin-boundaries.
+assert.ok(!existsSync(join(packageRoot, 'plugins/module-boundaries-oxlint.mjs')), 'the fake-program module-boundaries wrapper must be removed');
+assert.equal(packageManifest.dependencies['@hughescr/oxlint-plugin-module-boundaries'], '^2.0.0');
+for (const removed of ['@hughescr/eslint-plugin-module-boundaries', 'eslint-plugin-boundaries', 'eslint-import-resolver-typescript', 'typescript']) {
+    assert.ok(!(removed in packageManifest.dependencies), `${removed} must not be a runtime dependency`);
+}
+assert.ok(!('boundaries' in pkg), 'the eslint-plugin-boundaries add-on export is gone; defineBoundaries comes from the native plugin');
+assert.equal(typeof pkg.defineBoundaries, 'function');
 // The retired 47-rule default core from 0.9.1, not the former opt-in groups.
 const retiredSonarjsCore = `no-floating-point-equality no-hardcoded-ip no-identical-expressions no-duplicated-branches
     misplaced-loop-counter no-globals-shadowing pseudo-random no-ignored-exceptions file-permissions
@@ -43,9 +51,9 @@ function put(name, text) {
     mkdirSync(join(filename, '..'), { recursive: true });
     writeFileSync(filename, text);
 }
-function lint(files, extra = []) {
-    const result = spawnSync('node', [cli, '-c', 'oxlint.config.ts', '--format', 'json', ...extra, ...files], {
-        cwd: consumer, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
+function lint(files, extra = [], { cwd = consumer, config = 'oxlint.config.ts' } = {}) {
+    const result = spawnSync('node', [cli, '-c', config, '--format', 'json', ...extra, ...files], {
+        cwd, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
         env: { ...process.env, PATH: `${join(consumer, 'node_modules/.bin')}:${process.env.PATH}` },
     });
     assert.ifError(result.error);
@@ -59,6 +67,10 @@ function has(result, code) {
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === code),
         `Missing ${code}; got ${result.diagnostics.map(diagnostic => diagnostic.code).join(', ')}\n${result.stderr}`);
 }
+/** The `dependencies` findings of a lint run as `{ 'layers/<file>': message }`, whichever way the file was named. */
+const layerFindings = checked => Object.fromEntries(checked.diagnostics
+    .filter(diagnostic => diagnostic.code === '@hughescr/module-boundaries(dependencies)')
+    .map(diagnostic => [diagnostic.filename.slice(diagnostic.filename.indexOf('layers/')), diagnostic.message]));
 // Samples for the ported sonarjs ast-grep rules: every bad construct once (JS variants drop the type annotations).
 const sampleBad = types => `export function a(xs${types ? ': number[]' : ''}, m${types ? ': Map<string, number>' : ''}, s${types ? ': Set<number>' : ''}) {
   const t1 = xs.length >= 0;
@@ -279,38 +291,42 @@ async function checkRealInstallTypes() {
         const write = (name, text) => { mkdirSync(join(typed, name, '..'), { recursive: true }); writeFileSync(join(typed, name), text); };
         write('package.json', JSON.stringify({ name: 'real-install-consumer', type: 'module', private: true }));
         write('tsconfig.json', JSON.stringify({ compilerOptions: { strict: true, noEmit: true, target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', types: [], skipLibCheck: false }, include: ['*.ts'] }));
-        // The README example plus defineBoundaries, with every settings merge the README documents.
+        // The README example plus defineBoundaries; the only settings merge is the Bun test one.
+        write('src/utils/index.ts', 'export const util = 1;\n');
+        write('src/agent/index.ts', 'export const agent = 1;\n');
+        write('globals.d.ts', 'interface ImportMeta { readonly dirname: string }\n');
         write('oxlint.config.ts', `import config, { bunTest, defineBoundaries, lodash, root } from '${installedPackage}';
 import { defineConfig } from 'oxlint';
 
 const architecture = defineBoundaries({
-    files: ['src/**/*.ts'],
-    elements: [
-        { type: 'utils', pattern: 'src/utils/**' },
-        { type: 'agent', pattern: 'src/agent/**' },
-    ],
-    dependencies: {
-        default: 'disallow',
-        policies: [{ from: { element: { type: 'agent' } }, allow: { to: { element: { type: ['utils'] } } } }],
-    },
+    root: import.meta.dirname,
+    include: ['src/**'],
     ignore: ['**/*.test.ts'],
+    modules: { utils: 'src/utils', agent: 'src/agent' },
+    allow: { agent: ['utils'] },
 });
 
 export default defineConfig({
     ...root,
     extends: [config, lodash, bunTest, architecture],
-    settings: { ...root.settings, ...bunTest.settings, ...architecture.settings },
+    settings: { ...root.settings, ...bunTest.settings },
 });
 `);
         // Negative type checks: the declarations must reject misuse, not just accept the happy path.
         write('misuse.ts', `import { defineBoundaries } from '${installedPackage}';
 // @ts-expect-error missing required options
 defineBoundaries({});
+// @ts-expect-error a misspelt module name in allow
+defineBoundaries({ root: '/project', modules: { utils: 'src/utils' }, allow: { utils: ['utilz'] } });
 // @ts-expect-error severity is 'error' | 'warn'
-defineBoundaries({ elements: [], dependencies: {}, files: [], severity: 'fatal' });
+defineBoundaries({ root: '/project', modules: { utils: 'src/utils' }, severity: 'fatal' });
+// The fragment is typed: jsPlugins entries are name + specifier.
+export const plugins: { name: string, specifier: string }[] = defineBoundaries({ root: '/project', modules: { utils: 'src/utils' } }).jsPlugins;
+// @ts-expect-error the eslint-plugin-boundaries add-on is gone
+import { boundaries } from '${installedPackage}';
 // @ts-expect-error there is no such export
 import { notAnExport } from '${installedPackage}';
-export { notAnExport };
+export { boundaries, notAnExport };
 `);
         // Vacuity guard: the same engine must flag a genuinely unsafe assignment in this consumer.
         write('unsafe.ts', 'declare const loose: any;\nexport const strict: number = loose;\n');
@@ -531,11 +547,19 @@ export default { extends: [config], options: { reportUnusedDisableDirectives: 'o
     has(lint(['bad.ts']), 'typescript(no-floating-promises)');
     put('a/internal.ts', '/** @internal */\nexport const privateValue = 1;\n');
     put('b/use.ts', "import { privateValue } from '../a/internal';\nexport const answer = privateValue;\n");
+    // The `moduleBoundaries` export alone loads the plugin and enables the two generic barrel rules; it needs no policy and no settings.
+    assert.deepEqual(Object.keys(pkg.moduleBoundaries.rules).toSorted(), ['@hughescr/module-boundaries/no-internal-in-barrel', '@hughescr/module-boundaries/no-star-export-from-non-barrel']);
     put('oxlint.config.ts', `import { moduleBoundaries } from '@hughescr/oxlint-config-default';
-export default { categories: { correctness: 'off' }, extends: [moduleBoundaries], rules: {
-'@hughescr/module-boundaries/no-cross-module-internal': ['error', { modules: [
-{ type: 'a', pattern: 'a/**' }, { type: 'b', pattern: 'b/**' }] }] } };\n`);
-    has(lint(['b/use.ts']), '@hughescr/module-boundaries(no-cross-module-internal)');
+export default { categories: { correctness: 'off' }, extends: [moduleBoundaries] };\n`);
+    has(lint(['index.ts']), '@hughescr/module-boundaries(no-internal-in-barrel)');
+    // The policy rule `no-cross-module-internal` takes the policy through `defineBoundaries`.
+    put('internal.config.mjs', `import { defineBoundaries } from '@hughescr/oxlint-config-default';
+export default defineBoundaries({ root: import.meta.dirname, modules: { a: 'a', b: 'b' }, allow: { b: ['a'] }, entry: false });\n`);
+    put('oxlint.config.ts', `import architecture from './internal.config.mjs';
+export default { categories: { correctness: 'off' }, extends: [architecture] };\n`);
+    const crossInternal = lint(['b/use.ts']);
+    has(crossInternal, '@hughescr/module-boundaries(no-cross-module-internal)');
+    assert.ok(!crossInternal.diagnostics.some(diagnostic => diagnostic.code === '@hughescr/module-boundaries(dependencies)'), 'the allowed a<-b edge must stay clean');
     // A narrow imported override distinguishes consumer-relative matching from matching
     // against the module directory (broad **/*.ts globs alone cannot prove the anchor).
     put('node_modules/shared-override-probe/package.json', '{"type":"module","exports":"./index.mjs"}');
@@ -583,40 +607,83 @@ export default {
     assert.deepEqual(applied.diagnostics.filter(diagnostic => diagnostic.code === 'eslint(no-undef)'), []);
     assert.ok(!applied.diagnostics.some(diagnostic => diagnostic.filename.endsWith('ignored/b.mjs')));
     assert.ok(applied.diagnostics.some(diagnostic => diagnostic.message === 'settings={"probeSetting":1}'));
-    // Optional `boundaries` add-on: two layers, one forbidden import (fires) and one allowed import (clean).
-    // Elements resolve against the working directory (the consumer root), exactly like a real project.
-    assert.ok(pkg.boundaries && typeof pkg.defineBoundaries === 'function', 'boundaries and defineBoundaries must be exported');
-    assert.ok(isAbsolute(pkg.boundaries.jsPlugins[0].specifier) && pkg.boundaries.jsPlugins[0].name === 'boundaries', 'boundaries loads the plugin by absolute specifier');
-    const resolverKeys = Object.keys(pkg.boundaries.settings['import/resolver']);
-    assert.ok(resolverKeys.length === 1 && isAbsolute(resolverKeys[0]), 'the import resolver is addressed by absolute path so a strict installer cannot lose it');
-    assert.equal(pkg.boundaries.rules, undefined, 'the bare add-on carries no project policy');
-    const layerElements = [{ type: 'low', pattern: 'layers/low/**' }, { type: 'high', pattern: 'layers/high/**' }];
-    const architecture = pkg.defineBoundaries({
-        elements: layerElements,
-        dependencies: { default: 'disallow', policies: [{ from: { element: { type: 'high' } }, allow: { to: { element: { type: ['low'] } } } }] },
-        files: ['layers/**/*.ts'],
-    });
-    assert.deepEqual(architecture.settings['boundaries/elements'], layerElements);
-    assert.deepEqual(architecture.jsPlugins, pkg.boundaries.jsPlugins);
-    assert.equal(architecture.overrides.length, 1);
-    assert.deepEqual(architecture.overrides[0].files, ['layers/**/*.ts']);
-    assert.equal(architecture.overrides[0].rules['boundaries/dependencies'][0], 'error');
-    put('layers/low/a.ts', 'export const lowValue = 1;\n');
-    put('layers/high/b.ts', `import { lowValue } from '../low/a';\nexport const highValue = lowValue + 1;\n`);
-    put('layers/low/c.ts', `import { highValue } from '../high/b';\nexport const forbidden = highValue;\n`);
-    const architectureSource = `import { defineBoundaries } from '@hughescr/oxlint-config-default';
-const architecture = defineBoundaries({
-    elements: [{ type: 'low', pattern: 'layers/low/**' }, { type: 'high', pattern: 'layers/high/**' }],
-    dependencies: { default: 'disallow', policies: [{ from: { element: { type: 'high' } }, allow: { to: { element: { type: ['low'] } } } }] },
-    files: ['layers/**/*.ts'],
-});\n`;
-    put('oxlint.config.ts', `${architectureSource}export default { categories: { correctness: 'off' }, extends: [architecture], settings: { ...architecture.settings } };\n`);
-    const layered = lint(['layers']);
-    const boundaryHits = layered.diagnostics.filter(diagnostic => diagnostic.code === 'boundaries(dependencies)');
-    assert.deepEqual(boundaryHits.map(diagnostic => diagnostic.filename), ['layers/low/c.ts'], `only the forbidden import may fire boundaries(dependencies)\n${layered.stdout}${layered.stderr}`);
-    // Settings do not inherit through `extends`, so omitting the root merge silences the rule (the README documents this).
-    put('oxlint.config.ts', `${architectureSource}export default { categories: { correctness: 'off' }, extends: [architecture] };\n`);
-    assert.ok(!lint(['layers']).diagnostics.some(diagnostic => diagnostic.code === 'boundaries(dependencies)'), 'without the root settings merge the rule has no elements to classify with');
+    // Module boundaries: one policy file per project, extended next to the default config. The fixture has a
+    // forbidden edge, a deep import past a barrel, a type-only edge used as a value, an unassigned file and
+    // allowed imports (one value, one type-only). There is deliberately no root `settings` merge: the policy
+    // travels as rule options, so nothing but `extends` is needed and Oxlint can run from any directory.
+    put('layers/low/index.ts', 'export const lowValue = 1;\n');
+    put('layers/low/inner.ts', 'export const innerValue = 2;\n');
+    put('layers/types/index.ts', 'export type Shape = { sides: number };\nexport const shapeValue = 3;\n');
+    put('layers/high/index.ts', `import { lowValue } from '../low/index';\nexport const highValue = lowValue + 1;\n`);
+    put('layers/low/forbidden.ts', `import { highValue } from '../high/index';\nexport const forbidden = highValue;\n`);
+    put('layers/high/deep.ts', `import { innerValue } from '../low/inner';\nexport const deep = innerValue;\n`);
+    put('layers/low/type-ok.ts', `import type { Shape } from '../types/index';\nexport type Sized = Shape;\n`);
+    put('layers/low/type-bad.ts', `import { shapeValue } from '../types/index';\nexport const used = shapeValue;\n`);
+    put('layers/stray.ts', 'export const stray = 1;\n');
+    const layerPolicy = `{
+    root: import.meta.dirname,
+    include: ['layers/**'],
+    modules: { low: 'layers/low', high: 'layers/high', types: 'layers/types' },
+    allow: { high: ['low'] },
+    allowTypeOnly: { low: ['types'] },
+}`;
+    put('layers.config.mjs', `import { defineBoundaries } from '@hughescr/oxlint-config-default';\nexport default defineBoundaries(${layerPolicy});\n`);
+    put('oxlint.config.ts', `import config from '@hughescr/oxlint-config-default';
+import architecture from './layers.config.mjs';
+export default { extends: [config, architecture] };\n`);
+    const expectedLayerFindings = {
+        'layers/low/forbidden.ts': /Module 'low' may not import module 'high'/u,
+        'layers/high/deep.ts': /Module 'high' must import module 'low' through its entry/u,
+        'layers/low/type-bad.ts': /Module 'low' may import module 'types' only with a type-only import/u,
+        'layers/stray.ts': /is in no module of the boundaries policy/u,
+    };
+    const assertLayerFindings = (checked, where) => {
+        const found = layerFindings(checked);
+        assert.deepEqual(Object.keys(found).toSorted(), Object.keys(expectedLayerFindings).toSorted(), `${where}: exactly the four violations, never the allowed imports\n${checked.stdout}${checked.stderr}`);
+        for (const [file, pattern] of Object.entries(expectedLayerFindings)) { assert.match(found[file], pattern, `${where}: ${file}`); }
+    };
+    assertLayerFindings(lint(['layers']), 'consumer root, no settings merge');
+    // A file named through a symlinked directory is canonicalised by the plugin and still matched against the policy.
+    symlinkSync('layers', join(consumer, 'linked-layers'));
+    assertLayerFindings(lint(['linked-layers']), 'files named through a symlinked directory');
+    // The same policy from a different working directory: nothing resolves against the cwd.
+    put('policy-only.config.ts', `import architecture from './layers.config.mjs';
+export default { categories: { correctness: 'off' }, extends: [architecture] };\n`);
+    const elsewhere = mkdtempSync(join(tmpdir(), 'oxlint-config-elsewhere-'));
+    try {
+        assertLayerFindings(lint([join(consumer, 'layers')], [], { cwd: elsewhere, config: join(consumer, 'policy-only.config.ts') }), 'different working directory');
+    } finally { rmSync(elsewhere, { recursive: true, force: true }); }
+    // One plugin copy: the policy fragment registers exactly the default config's jsPlugins entry (same name, same
+    // absolute specifier), so extending both (and the fragment twice) loads the plugin once and reports each import once.
+    put('one-plugin.mjs', `import assert from 'node:assert/strict';
+import { isAbsolute } from 'node:path';
+import config from '@hughescr/oxlint-config-default';
+import architecture from './layers.config.mjs';
+const own = list => list.filter(plugin => plugin.name === '@hughescr/module-boundaries');
+assert.equal(own(config.jsPlugins).length, 1);
+assert.ok(isAbsolute(own(config.jsPlugins)[0].specifier));
+assert.deepEqual(architecture.jsPlugins, own(config.jsPlugins));
+assert.equal(architecture.settings, undefined, 'the fragment needs no root settings');
+`);
+    const onePlugin = spawnSync('node', ['one-plugin.mjs'], { cwd: consumer, encoding: 'utf8' });
+    assert.ifError(onePlugin.error);
+    assert.equal(onePlugin.status, 0, onePlugin.stdout + onePlugin.stderr);
+    put('twice.config.ts', `import { moduleBoundaries } from '@hughescr/oxlint-config-default';
+import architecture from './layers.config.mjs';
+export default { categories: { correctness: 'off' }, extends: [moduleBoundaries, architecture, architecture] };\n`);
+    assertLayerFindings(lint(['layers'], [], { config: 'twice.config.ts' }), 'fragment extended twice');
+    // A second INSTALLED copy of the plugin (a policy file importing it directly) registers the same name with another
+    // specifier, which Oxlint refuses at config load. Importing `defineBoundaries` from this package avoids it; the README says so.
+    cpSync(realpathSync(join(root, 'node_modules/@hughescr/oxlint-plugin-module-boundaries')), join(consumer, 'dup-plugin'), { recursive: true });
+    symlinkSync(join(root, 'node_modules'), join(consumer, 'dup-plugin/node_modules'));
+    put('dup.config.mjs', `import { defineBoundaries } from './dup-plugin/dist/index.js';\nexport default defineBoundaries(${layerPolicy});\n`);
+    put('oxlint.config.ts', `import { moduleBoundaries } from '@hughescr/oxlint-config-default';
+import duplicate from './dup.config.mjs';
+export default { categories: { correctness: 'off' }, extends: [moduleBoundaries, duplicate] };\n`);
+    const clash = spawnSync('node', [cli, '-c', 'oxlint.config.ts', 'layers'], { cwd: consumer, encoding: 'utf8' });
+    assert.ifError(clash.error);
+    assert.notEqual(clash.status, 0, 'two copies under one plugin name must not load');
+    assert.match(clash.stdout + clash.stderr, /Plugin name '@hughescr\/module-boundaries' is already registered/u);
 
     // `package-json` entry point: a minimal ESLint flat config that lints only package.json (Oxlint cannot).
     const eslintCli = join(root, 'node_modules/eslint/bin/eslint.js');

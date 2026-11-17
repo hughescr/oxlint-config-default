@@ -50,7 +50,7 @@ Oxlint 1.94.0 does **not** inherit some fields from an extended config object. T
 | --- | --- | --- |
 | `env` (root) | no | Without it `process` in an `.mjs` file is a false `no-undef`. The default sets `env` inside an `overrides` entry, which **is** inherited, so extending the default alone is enough. `root.env` carries the same value for the consumer root. |
 | `globals` (root) | no | None shipped. Put project globals in an `overrides` entry (inherited) or at your root. |
-| `settings` | no | `bunTest.settings` (`jest.globalPackage = 'bun:test'`) and the `boundaries` add-on's settings must be set at the consumer root: `settings: { ...root.settings, ...bunTest.settings, ...architecture.settings }`. `root.settings` is `{}` today and reserved for future base settings, so spreading it keeps consumers forward compatible. |
+| `settings` | no | `bunTest.settings` (`jest.globalPackage = 'bun:test'`) must be set at the consumer root: `settings: { ...root.settings, ...bunTest.settings }`. `root.settings` is `{}` today and reserved for future base settings, so spreading it keeps consumers forward compatible. The module-boundaries rules read no settings (the policy is a rule option). |
 | `ignorePatterns` | no | None shipped; set your own (`node_modules/`, `dist/`) at the root. |
 | `options` | **yes**, field by field (verified: `typeAware`, `reportUnusedDisableDirectives`, `maxWarnings`); the consumer's own value wins | `typeAware: true` and `reportUnusedDisableDirectives: 'warn'` are set here. |
 | `env`/`globals` inside `overrides` | yes | Used for `env` above. |
@@ -233,59 +233,49 @@ The writable-directory port likewise misses env aliases/destructuring, `globalTh
 
 ### `moduleBoundaries`
 
-The two generic barrel rules are **already included in the default**. The named export also allows using only those rules, or adding the project-specific rule with options:
+The default loads the native Oxlint plugin [`@hughescr/oxlint-plugin-module-boundaries`](https://www.npmjs.com/package/@hughescr/oxlint-plugin-module-boundaries) 2.x (a dependency of this package; it needs no TypeScript program and no `settings`) under the name `@hughescr/module-boundaries`, and **already enables its two generic barrel rules**: `no-internal-in-barrel` (an `index.ts` re-exporting an `@internal` symbol) and `no-star-export-from-non-barrel`. They take no options. The named `moduleBoundaries` export is exactly that jsPlugins entry plus those two rules, for a config that does not extend the default. The two policy rules, `dependencies` and `no-cross-module-internal`, need a project policy: use `defineBoundaries`.
 
-```ts
-import config, { root } from '@hughescr/oxlint-config-default';
-import { defineConfig } from 'oxlint';
-export default defineConfig({
-    ...root,
-    extends: [config],
-    settings: { ...root.settings, 'module-boundaries/tsconfig': 'tsconfig.json' },
-    rules: {
-        '@hughescr/module-boundaries/no-cross-module-internal': ['error', {
-            modules: [
-                { type: 'domain', pattern: 'src/domain/**' },
-                { type: 'storage', pattern: 'src/storage/**' },
-            ],
-        }],
-    },
+### `defineBoundaries`
+
+Layer rules take one policy file per project and one `extends` entry. `defineBoundaries(policy)` validates the policy (it throws a `TypeError` naming the problem) and returns an Oxlint fragment, `{ jsPlugins, overrides }`, that registers the plugin and enables `dependencies` and `no-cross-module-internal` with the policy as rule options:
+
+```js
+// boundaries.config.mjs
+import { defineBoundaries } from '@hughescr/oxlint-config-default';
+
+export default defineBoundaries({
+    root: import.meta.dirname,           // absolute project directory; every path and glob below is relative to it
+    include: ['src/**'],                 // a linted file matching this that is in no module is reported
+    ignore: ['**/*.{test,spec}.*'],
+    modules: { utils: 'src/utils', agent: 'src/agent', main: 'src/index.ts' },   // a directory, or a file for a one-file module
+    allow: { agent: ['utils'], main: ['agent'] },     // default deny: the modules each module may import
+    // optional: allowTypeOnly (edges only `import type` may use), exceptions, entry ('index.ts'), tsconfig, severity ('error')
 });
 ```
 
-The wrapper supplies syntax parsing and TS module resolution, not a type checker. It defaults to `tsconfig.json` relative to the lint process cwd. No project-specific module policies are imposed by this package.
-
-### `boundaries` and `defineBoundaries`
-
-Optional architecture rules ([eslint-plugin-boundaries](https://www.jsboundaries.dev/) v7, `boundaries/dependencies`: which layer may import which). The package ships the plugin as a jsPlugin (absolute specifier) and the TypeScript import resolver setting it needs (`eslint-import-resolver-typescript`, also a dependency of this package, addressed by absolute path), and no project policy. The bare `boundaries` export is exactly that (`jsPlugins` plus `settings`). Projects normally call `defineBoundaries`, which adds the layer list and the dependency policy once and returns an extendable add-on:
-
 ```ts
-import config, { bunTest, defineBoundaries, root } from '@hughescr/oxlint-config-default';
+// oxlint.config.ts
+import config, { bunTest, root } from '@hughescr/oxlint-config-default';
 import { defineConfig } from 'oxlint';
-
-const architecture = defineBoundaries({
-    files: ['src/**/*.ts'],                                   // where the rule runs (an Oxlint override)
-    elements: [                                               // boundaries/elements: the layers
-        { type: 'utils', pattern: 'src/utils/**' },
-        { type: 'agent', pattern: 'src/agent/**' },
-    ],
-    dependencies: {                                           // options of boundaries/dependencies
-        default: 'disallow',
-        policies: [{ from: { element: { type: 'agent' } }, allow: { to: { element: { type: ['utils'] } } } }],
-    },
-    // optional: fileCategories (boundaries/files), ignore (boundaries/ignore), tsconfig ('./tsconfig.json'), severity ('error')
-});
+import boundaries from './boundaries.config.mjs';
 
 export default defineConfig({
     ...root,
-    extends: [config, bunTest, architecture],
-    settings: { ...root.settings, ...bunTest.settings, ...architecture.settings },   // settings never inherit: merge at the root
+    extends: [config, bunTest, boundaries],
+    settings: { ...root.settings, ...bunTest.settings },   // nothing from the boundaries policy goes here
 });
 ```
 
-`architecture` is `{ jsPlugins, settings, overrides }`: the plugin, the settings (`import/resolver`, `boundaries/elements`, and `boundaries/files` / `boundaries/ignore` when given) and one override that runs `boundaries/dependencies` on `files` at the given severity. Because Oxlint does not inherit `settings` through `extends` (see [Root-only fields](#root-only-fields)), **omitting `...architecture.settings` at the root silences the rule** (the plugin only warns that no element descriptors were provided). `defineBoundaries` throws if `elements`, `dependencies` or `files` is missing. The policy shape is the plugin's own; see its documentation for `policies`, selectors and `fileInternalPath`.
+The fragment carries the policy as rule options, so there is **no `settings` merge**, and Oxlint may run from any working directory; files named through symlinks are matched against the policy by their real paths. The plugin needs Node `^20.19.0 || >=22.12.0`. The rules report an import along an edge the policy does not allow, a value import along a type-only edge, an import that skips the target module's entry file (a deep import past its barrel), an included file that belongs to no module, and a named import or re-export of an `@internal` export from another module. `import x = require('…')` is checked as a value import. The full policy reference (fields, `exceptions`, `entry`, `allowTypeOnly`) and rule details are in the plugin's own README, installed at `node_modules/@hughescr/oxlint-plugin-module-boundaries/README.md`. Suppress a finding with `// eslint-disable-next-line @hughescr/module-boundaries/dependencies -- reason`; `reportUnusedDisableDirectives` reports one that is no longer needed.
 
-Known constraint: the rule resolves the `elements` globs and the resolver's `tsconfig` against the **working directory**, so run Oxlint from the repo root (`node node_modules/oxlint/bin/oxlint ...`), never from a subfolder. Violations are suppressed with `// eslint-disable-next-line boundaries/dependencies -- reason`, and `reportUnusedDisableDirectives` reports one that is no longer needed.
+**Import `defineBoundaries` from this package, not from the plugin package.** Oxlint keys a jsPlugin by its `name` and refuses a second entry that carries the same name with a different file. Verified on Oxlint 1.94.0; the self-check pins both results:
+
+- The same `{ name, specifier }` entry arriving through several `extends` entries (the default config plus the fragment, or the fragment twice) loads once, and each finding is reported once. Specifiers naming the same file by different paths (`..` segments, a symlink) were also accepted as one entry when tried by hand.
+- The same name with two different files (two installed copies of the plugin, for example one in a policy file's own `node_modules` and one under this package) fails at config load: `Plugin name '@hughescr/module-boundaries' is already registered`.
+
+This package depends on the plugin and re-exports its `defineBoundaries`, so the fragment's jsPlugins entry is the same name and absolute specifier as the default config's: both come from the one copy that Node resolves from this package. A policy file that imports `@hughescr/oxlint-plugin-module-boundaries` directly gets whichever copy resolves from the policy file's location, which can differ (nested installs, version skew) and then fails as above. The self-check asserts that the default's entry and the fragment's entry are identical, and that a second installed copy is refused.
+
+Coming from the eslint-plugin-boundaries add-on (`boundaries`, `defineBoundaries({ elements, dependencies, files, ... })`, root `settings` merge): both are gone. Each `elements` entry becomes a `modules` entry, each `allow` policy becomes `allow[module]` (`dependency: { kind: 'type' }` becomes `allowTypeOnly`), `files` becomes `include`, `ignore` stays, "disallow `!index.ts`" is the default `entry`, and the root `settings` merge and the TypeScript resolver go away. Disable comments name `@hughescr/module-boundaries/dependencies` instead of `boundaries/dependencies`.
 
 Disable comments and ast-grep
 ----------------------------
@@ -382,7 +372,7 @@ The port uses the effective rule ids and options from the shared ESLint config i
 | regexp | 61 | 61 |
 | @stylistic | 67 | 67 |
 | test-hygiene | 4 | 4 |
-| module-boundaries wrapper | 2 | 2 |
+| module-boundaries (generic barrel rules) | 2 | 2 |
 | **Total active rules (ordinary source files)** | **413** | **466** |
 
 Test overrides disable 11 active rules for TS tests; shared JS test relaxations are also applied. Optional lodash adds 23 rules; optional bunTest adds 12. The 25 ast-grep logical rules run separately and are not included in the Oxlint totals.
@@ -409,7 +399,7 @@ bun run lint
 bun pm pack --dry-run
 ```
 
-Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and optional export, a two-layer `boundaries` project (one forbidden and one allowed import), the `package-json` ESLint config (good, bad, private and duplicate-key manifests), clean diagnostics, warning exit behavior, inherited TS/test overrides, type-aware mode and root-field inheritance. Regression checks require SonarJS to be absent, verify `bun:test` assertion checking and compare JS/TS `no-shadow` options using `--print-config`. Every ast-grep rule has bad/clean samples; the generic bans and six new port/tripwire fixtures run through a real installed `ruleDirs` sgconfig across all eight supported extensions and conventional test/source locations, comparing exact lines, language ids and severity. The README must name every shipped rule file. Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; integration tests exercise the distributed config. A second consumer installs the packed payload as a real directory (not a symlink): the README config plus `defineBoundaries` must have no unsafe type-aware findings, an unsafe sentinel must be reported, TypeScript positive/negative checks must pass, and packed declarations must match runtime exports, including the internal `rules.mjs` data module. `bun run build:types` and prepack use the Node-only `build-types.mjs` helper to remove the three generated outputs before tsrs declaration-only emit from `.mjs` sources and JSDoc via `tsconfig.types.json`; adjacent stale declarations must not shadow the sources during later builds. Generated `.d.mts` files are git-ignored, never hand-written or committed. JavaScript source checking is not enabled; there is no mutation-test setup.
+Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and optional export, a three-module `defineBoundaries` project (a forbidden edge, a deep import past a barrel, a type-only edge used as a value, an unassigned file, and allowed value and type-only imports) run with no root `settings` and from a different working directory, the one-plugin-copy contract (the fragment's jsPlugins entry equals the default's; a second installed copy is refused), the `package-json` ESLint config (good, bad, private and duplicate-key manifests), clean diagnostics, warning exit behavior, inherited TS/test overrides, type-aware mode and root-field inheritance. Regression checks require SonarJS to be absent, verify `bun:test` assertion checking and compare JS/TS `no-shadow` options using `--print-config`. Every ast-grep rule has bad/clean samples; the generic bans and six new port/tripwire fixtures run through a real installed `ruleDirs` sgconfig across all eight supported extensions and conventional test/source locations, comparing exact lines, language ids and severity. The README must name every shipped rule file. Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; integration tests exercise the distributed config. A second consumer installs the packed payload as a real directory (not a symlink): the README config plus `defineBoundaries` (typed policy, misspelt module names rejected) must have no unsafe type-aware findings, an unsafe sentinel must be reported, TypeScript positive/negative checks must pass, and packed declarations must match runtime exports, including the internal `rules.mjs` data module. `bun run build:types` and prepack use the Node-only `build-types.mjs` helper to remove the three generated outputs before tsrs declaration-only emit from `.mjs` sources and JSDoc via `tsconfig.types.json`; adjacent stale declarations must not shadow the sources during later builds. Generated `.d.mts` files are git-ignored, never hand-written or committed. JavaScript source checking is not enabled; there is no mutation-test setup.
 
 Releases
 --------
