@@ -92,47 +92,20 @@ A compatibility adapter supplies the legacy context methods used by eslint-plugi
 
 ### `bunTest`
 
-The ESLint shared default has no Jest rules. This optional config enables four native Jest rules and seven `jest-js` rules for `*.test.*` and `*.spec.*`. It has no project-specific syntax restrictions. The native plugin ignores Bun imports for seven rules, so those rules use eslint-plugin-jest instead.
+The ESLint shared default has no Jest rules. This optional config enables four native Jest rules and eight `jest-js` rules for `*.test.*` and `*.spec.*`. It has no project-specific syntax restrictions. The JS plugin recognizes `bun:test` imports through the settings below.
 
-Do not omit the root `settings` (see the usage example above): `jest.globalPackage = 'bun:test'` makes the JS-plugin rules recognize imported Bun test functions. Native rules are `no-commented-out-tests`, `prefer-hooks-in-order` (errors), `prefer-jest-mocked`, `prefer-spy-on` (warnings). JS rules are `expect-expect`, `no-disabled-tests`, `no-done-callback`, `no-duplicate-hooks`, `no-focused-tests`, `no-standalone-expect`, `prefer-hooks-on-top` (errors).
+Do not omit the root `settings` (see the usage example above): `jest.globalPackage = 'bun:test'` makes the JS-plugin rules recognize imported Bun test functions. Native rules are `no-commented-out-tests`, `prefer-hooks-in-order` (errors), `prefer-jest-mocked`, `prefer-spy-on` (warnings). JS rules are `expect-expect`, `no-disabled-tests`, `no-done-callback`, `no-duplicate-hooks`, `no-focused-tests`, `no-standalone-expect`, `prefer-hooks-on-top`, `valid-expect` (errors). `valid-expect` requires 1–2 arguments (Bun accepts an assertion message), a matcher, and awaited or returned async assertions, including Bun's `toReject` / `toResolve`; `alwaysAwait` is false so returning an assertion is allowed.
 
-A configuration-only probe on Oxlint 1.94.0 confirms that all seven JS rules fire for `bun:test`, while all seven native counterparts stay silent for the same imports. Native `settings.jest` supports only `version`; `globalPackage`, `globalAliases`, Jest globals/environment and tsconfig aliases do not fix import recognition. Native Vitest also ignores these imports and has no `no-done-callback` counterpart. Keep `eslint-plugin-jest` until native import-source support is available; upstream tracks the missing setting in [oxc-project/oxc#23290](https://github.com/oxc-project/oxc/issues/23290).
+The self-check verifies `valid-expect` with real `bun:test` imports, including clean async assertions and assertion messages. A configuration-only probe on Oxlint 1.94.0 confirms that the other seven JS rules fire for `bun:test`, while their native counterparts stay silent for the same imports. Native `settings.jest` supports only `version`; `globalPackage`, `globalAliases`, Jest globals/environment and tsconfig aliases do not fix import recognition. Native Vitest also ignores these imports and has no `no-done-callback` counterpart. Keep `eslint-plugin-jest` until native import-source support is available; upstream tracks the missing setting in [oxc-project/oxc#23290](https://github.com/oxc-project/oxc/issues/23290).
 
-### `sonarjs` (core, in the default) and opt-in groups
+SonarJS coverage
+----------------
 
-SonarJS ships as a small reliable core plus opt-in groups, all loaded through one wrapper. JS plugins receive no TypeScript type information, so rules that are silent without types are never enabled.
+This package does not use `eslint-plugin-sonarjs`, in either the default or optional exports. Syntactic ports run through the ast-grep rule directory, and native/other plugin rules provide the replacements below. Compiler rows require a separate TypeScript check; typed rules do not restore JS-only coverage.
 
-**Core: `sonarjs` (47 rules, already included in the default; do not add it again).** Test-semantic rules run on test files only, general defect and security rules on non-test files, and four rules run on both. Test files are the package's `*.test.*`/`*.spec.*` globs.
+### Former sonarjs rule → what covers it now
 
-- 34 general rules, non-test files only: `no-floating-point-equality no-hardcoded-ip no-identical-expressions no-duplicated-branches misplaced-loop-counter no-globals-shadowing pseudo-random no-ignored-exceptions file-permissions non-existent-operator no-invariant-returns inconsistent-function-call no-use-of-empty-return-value no-all-duplicated-branches no-unused-collection no-element-overwrite no-empty-collection weak-ssl no-weak-keys unverified-certificate no-clear-text-protocols publicly-writable-directories unverified-hostname encryption-secure-mode no-weak-cipher stateful-regex redundant-type-aliases memoize-cache-key avoid-mutating-nested-properties-of-shallow-clones anchor-precedence cognitive-complexity` (warn, 15) `regex-complexity` (20) `no-hardcoded-passwords no-hardcoded-secrets`.
-- 9 test-semantic rules, test files only: `no-empty-test-file no-incomplete-assertions inverted-assertion-arguments parameterized-tests no-trivial-assertions async-test-assertions explicit-test-skip no-empty-parameterized-test-dataset no-duplicate-parameterized-test-case`.
-- 4 rules on all files: `hashing no-identical-functions` (3) `no-os-command-from-path no-internal-api-use`.
-
-Opt-in groups are config objects you add to `extends`, each loaded through the same wrapper and none part of the default. Membership is from the pruning evidence; rules whose group was ambiguous are listed below.
-
-```ts
-import config, { root, sonarjsAws, sonarjsWeb } from '@hughescr/oxlint-config-default';
-import { defineConfig } from 'oxlint';
-export default defineConfig({ ...root, extends: [config, sonarjsAws, sonarjsWeb] });
-```
-
-| Export | Rules | Content |
-| --- | ---: | --- |
-| `sonarjsAws` | 17 | all `aws-*` CDK/infrastructure rules |
-| `sonarjsWeb` | 28 | cookie, header, CORS/CSRF/session and HTTP-library rules, plus general injection and secret security: `content-security-policy cookie-no-httponly cors csrf file-uploads insecure-cookie insecure-jwt-token no-mime-sniff no-referrer-policy no-session-cookies-on-static-assets session-regeneration strict-transport-security x-powered-by xml-parser-xxe hardcoded-secret-signatures production-debug review-blockchain-mnemonic os-command sql-queries disabled-auto-escaping dompurify-unsafe-config hidden-files no-mixed-content frame-ancestors confidential-information-logging no-ip-forward content-length no-intrusive-permissions` |
-| `sonarjsFrameworks` | 16 | React, Vue, Angular, jQuery, axios, HTML and JSX: `link-with-target-blank no-angular-bypass-sanitization no-debounce-throttle-in-render no-hook-setter-in-body no-mutate-reactive-state-in-updated-hook no-useless-react-setstate no-uniq-key no-vue-class-component no-vue-mixins prefer-native-axios-alternative prefer-native-jquery-alternative table-header table-header-reference no-table-as-layout object-alt-content dynamically-constructed-templates` |
-| `sonarjsTestTooling` | 14 | chai, cypress, mocha, testing-library, vitest and other test-tool rules, on test files only: `chai-determinate-assertion disabled-timeout no-debug-commands-in-ui-tests no-fixed-wait-in-tests no-forced-browser-interaction no-interpolation-in-inline-snapshots no-same-argument-assert prefer-cypress-should testing-library-prefer-query-by-disappearance testing-library-query-assertion vitest-mock-at-module-scope assertions-in-tests no-incompatible-assertion-types synchronous-exception-assertions` |
-| `sonarjsStyle` | 25 | the 21 low-value style rules with the shared ESLint options (`no-nested-functions` threshold 5, `class-name`, `max-switch-cases` 30, `prefer-immediate-return` as a warning; `prefer-specific-assertions stable-tests test-check-exception` on test files only) plus `no-commented-code arguments-order no-redundant-optional no-control-regex` |
-
-Ambiguous placements: `dynamically-constructed-templates` and `link-with-target-blank` are in Frameworks (template and HTML rules); `disabled-timeout` (mocha) and the three rules that lose their typed behaviour without types (`assertions-in-tests`, `no-incompatible-assertion-types`, `synchronous-exception-assertions`) are in TestTooling; `os-command`, `sql-queries`, `xml-parser-xxe`, `hardcoded-secret-signatures`, `review-blockchain-mnemonic`, `production-debug`, `file-uploads`, `disabled-auto-escaping` and `dompurify-unsafe-config` are in Web; `no-commented-code`, `arguments-order` (weak without types), `no-redundant-optional`, and `no-control-regex` are catch-alls in Style. The built-in `no-control-regex` is deliberately off, matching the shared ESLint config: it is stricter than the SonarJS rule, notably for intentional control-character sanitiser ranges, so it is not equivalent coverage.
-
-**Reliability wrapper.** Oxlint 1.94.0 gives every linted file the same `context.sourceCode` object, and eslint-plugin-sonarjs 4.2.2 caches per-file import data keyed by that object's identity and never clears it. Rules gated on "is a test framework imported" therefore go silent depending on which file is linted first, differently from run to run with threads (stock plugin: wrong in 4 of 6 runs). `plugins/sonarjs-oxlint.mjs` clears the plugin's own per-file cache once per file; with it 6 of 6 runs are correct. The wrapper reaches into the plugin's internal `helpers/module.js`, so **`eslint-plugin-sonarjs` is pinned to an exact version** in `dependencies`; re-verify the self-check's repeat-run test before bumping it. The mechanism is isolated in one function so it can be replaced without touching the rule data.
-
-#### What covers each dropped SonarJS rule
-
-The 38 SonarJS rules that duplicate an enabled rule, two that duplicate built-ins the default enables for the purpose (`no-new`, `oxc/missing-throw`), and 13 more that earlier versions of this package enabled are not in any default or opt-in group. A self-check verifies every listed covering rule is actually enabled by the default (or by `bunTest`).
-
-| SonarJS rule | Covered by |
+| Former SonarJS rule | What covers it now |
 | --- | --- |
 | `sonarjs/assertions-in-test-cases` | `jest-js/no-standalone-expect` (`bunTest`), `jest-js/expect-expect` (`bunTest`) |
 | `sonarjs/block-scoped-var` | `block-scoped-var` |
@@ -187,19 +160,76 @@ The 38 SonarJS rules that duplicate an enabled rule, two that duplicate built-in
 | `sonarjs/no-empty-group` | `regexp/no-empty-group`, `regexp/no-empty-capturing-group` |
 | `sonarjs/concise-regex` | `regexp/prefer-d`, `regexp/prefer-w`, `regexp/prefer-plus-quantifier`, `regexp/prefer-star-quantifier`, `regexp/prefer-question-quantifier` |
 | `sonarjs/single-char-in-character-classes` | `regexp/no-useless-character-class` |
+| `sonarjs/comma-or-logical-or-case` | ast-grep `sonar-comma-or-logical-or-case` |
+| `sonarjs/no-collection-size-mischeck` | ast-grep `sonar-no-collection-size-mischeck` |
+| `sonarjs/no-equals-in-for-termination` | ast-grep `sonar-no-equals-in-for-termination` |
+| `sonarjs/no-useless-increment` | ast-grep `sonar-no-useless-increment` |
+| `sonarjs/reduce-initial-value` | ast-grep `sonar-reduce-initial-value` |
+| `sonarjs/publicly-writable-directories` | ast-grep `sonar-publicly-writable-directories` (non-test paths) |
+| `sonarjs/no-internal-api-use` | ast-grep `sonar-no-internal-api-use` (all paths) |
+| `sonarjs/no-incomplete-assertions`, `sonarjs/async-test-assertions` | `jest-js/valid-expect` (`bunTest`; supported expect syntax only) |
+| `sonarjs/no-ignored-exceptions` | `unicorn/prefer-optional-catch-binding` (unused catch bindings, not semantic error handling) |
+| `sonarjs/deprecation` | `typescript/no-deprecated` (TS only) |
+| `sonarjs/no-alphabetical-sort` | `typescript/require-array-sort-compare`, `ignoreStringArrays: false` (TS only) |
+| `sonarjs/unverified-certificate` | ast-grep `security-no-reject-unauthorized-false` (literal tripwire only) |
+| `sonarjs/hashing` | ast-grep `security-no-weak-hash-literal` (literal tripwire only) |
+| `sonarjs/no-weak-cipher`, `sonarjs/encryption-secure-mode` | ast-grep `security-no-weak-cipher-literal` (literal tripwire only) |
+| `sonarjs/weak-ssl` | ast-grep `security-no-weak-tls-literal` (literal tripwire only) |
 
-Six more duplicate a built-in that this package does **not** enable, so they are **not covered**. Enable the named built-in in your own config if you want the coverage:
+Scope/value-tracking security and semantic rules are not covered: secret detection, permission/key strength, hostname verification, command/injection analysis, cleartext URLs, duplicate branches/functions, collection/loop/return analysis, test semantics beyond the enabled Jest checks, framework-specific rules and complexity/style checks have no equivalent here. The four security tripwires match literal forms only, not aliases, variables/constants, spreads or evaluated expressions; they do not resolve imports. Seven SonarJS ports ship, not a full SonarJS replacement. Built-ins such as `no-labels`, `jest-js/no-identical-title`, `jest-js/valid-title`, `jest-js/valid-describe-callback` and `typescript/no-unnecessary-boolean-literal-compare` are not enabled; no coverage is claimed for their former SonarJS counterparts.
 
-| SonarJS rule | Built-in that would cover it |
-| --- | --- |
-| `sonarjs/label-position` | `no-labels` |
-| `sonarjs/no-labels` | `no-labels` |
-| `sonarjs/no-duplicate-test-title` | `jest-js/no-identical-title` (with the `bunTest` settings) |
-| `sonarjs/no-empty-test-title` | `jest-js/valid-title` (with the `bunTest` settings) |
-| `sonarjs/synchronous-suite-callback` | `jest-js/valid-describe-callback` (with the `bunTest` settings) |
-| `sonarjs/no-redundant-boolean` | `typescript/no-unnecessary-boolean-literal-compare` (type-aware; misses `a \|\| false`) |
+### Former core rules with no replacement
 
-Five rules are ported to ast-grep (next section): `sonarjs/comma-or-logical-or-case`, `sonarjs/no-collection-size-mischeck`, `sonarjs/no-equals-in-for-termination`, `sonarjs/no-useless-increment`, `sonarjs/reduce-initial-value`.
+The following 37 rules from the former 47-rule default core in 0.9.1 have no replacement (the other ten appear in the replacement table above):
+
+- `sonarjs/no-floating-point-equality`
+- `sonarjs/no-hardcoded-ip`
+- `sonarjs/no-identical-expressions`
+- `sonarjs/no-duplicated-branches`
+- `sonarjs/misplaced-loop-counter`
+- `sonarjs/no-globals-shadowing`
+- `sonarjs/pseudo-random`
+- `sonarjs/file-permissions`
+- `sonarjs/non-existent-operator`
+- `sonarjs/no-invariant-returns`
+- `sonarjs/inconsistent-function-call`
+- `sonarjs/no-use-of-empty-return-value`
+- `sonarjs/no-all-duplicated-branches`
+- `sonarjs/no-unused-collection`
+- `sonarjs/no-element-overwrite`
+- `sonarjs/no-empty-collection`
+- `sonarjs/no-weak-keys`
+- `sonarjs/no-clear-text-protocols`
+- `sonarjs/unverified-hostname`
+- `sonarjs/stateful-regex`
+- `sonarjs/redundant-type-aliases`
+- `sonarjs/memoize-cache-key`
+- `sonarjs/avoid-mutating-nested-properties-of-shallow-clones`
+- `sonarjs/anchor-precedence`
+- `sonarjs/cognitive-complexity`
+- `sonarjs/regex-complexity`
+- `sonarjs/no-hardcoded-passwords`
+- `sonarjs/no-hardcoded-secrets`
+- `sonarjs/no-os-command-from-path`
+- `sonarjs/no-identical-functions`
+- `sonarjs/no-empty-test-file`
+- `sonarjs/inverted-assertion-arguments`
+- `sonarjs/parameterized-tests`
+- `sonarjs/no-trivial-assertions`
+- `sonarjs/explicit-test-skip`
+- `sonarjs/no-empty-parameterized-test-dataset`
+- `sonarjs/no-duplicate-parameterized-test-case`
+
+### Known misses
+
+Raw source spellings are matched; escape sequences are not decoded:
+
+- `security-no-reject-unauthorized-false`: indirect/computed or escaped keys, destructured env / `Object.assign`, JSX attributes, member assignments, `Object.defineProperty`, evaluated false/zero values, substituted templates, `+=` / `&&=` and wrappers other than parentheses/TS assertions.
+- `security-no-weak-hash-literal`: renamed/destructured aliases, dynamic properties, concatenation, substituted templates, spreads, `bind` / `call` / `apply` and other APIs such as `createHmac` / `pbkdf2`.
+- `security-no-weak-cipher-literal`: dynamic properties, concatenation, spreads, indirect/parenthesized/non-null callees, options objects or non-first algorithm arguments, conditionals/calls hiding a value; weak prefixes and literal `-ecb` text in templates with substitutions may still match.
+- `security-no-weak-tls-literal`: indirect/computed keys or values, shorthand, substituted templates, assignments outside object literals, evaluated expressions, case variants and other TLS options such as `ciphers`.
+
+The writable-directory port likewise misses env aliases/destructuring, `globalThis.process` / `Bun.env`, dynamic keys, concatenated/constant paths, bare roots without a trailing slash and templates beginning with a substitution. The internal-API port covers literal import/export sources and bare `require()` / `import()` calls, not aliases, variables, spreads, concatenated/interpolated sources, receiver/bracket calls, `require.resolve()` or `import.meta.resolve()`.
 
 ### `moduleBoundaries`
 
@@ -285,6 +315,12 @@ Then run `ast-grep scan`. Each logical rule includes TypeScript, JavaScript/JSX,
 | `sonar-no-equals-in-for-termination` | `sonar-no-equals-in-for-termination.yml` | `sonarjs/no-equals-in-for-termination` |
 | `sonar-no-useless-increment` | `sonar-no-useless-increment.yml` | `sonarjs/no-useless-increment` |
 | `sonar-reduce-initial-value` | `sonar-reduce-initial-value.yml` | `sonarjs/reduce-initial-value` |
+| `sonar-publicly-writable-directories` | `sonar-publicly-writable-directories.yml` | `sonarjs/publicly-writable-directories`; non-test paths |
+| `sonar-no-internal-api-use` | `sonar-no-internal-api-use.yml` | `sonarjs/no-internal-api-use`; all paths |
+| `security-no-reject-unauthorized-false` | `security-no-reject-unauthorized-false.yml` | Literal `rejectUnauthorized: false` and TLS verification env-disable tripwire; non-test paths |
+| `security-no-weak-hash-literal` | `security-no-weak-hash-literal.yml` | Literal weak `createHash` / `crypto.subtle.digest` algorithms; non-test paths |
+| `security-no-weak-cipher-literal` | `security-no-weak-cipher-literal.yml` | Literal weak cipher algorithms / ECB; non-test paths |
+| `security-no-weak-tls-literal` | `security-no-weak-tls-literal.yml` | Literal insecure TLS options; non-test paths |
 | `no-silent-catch-undefined` | `no-silent-catch-undefined.yml` | ESLint `no-restricted-syntax` on `.catch(() => undefined)`; non-test source only |
 | `no-test-set-timeout` | `no-test-set-timeout.yml` | ESLint `no-restricted-syntax` on `setTimeout(...)`; test paths only |
 | `no-test-set-interval` | `no-test-set-interval.yml` | ESLint `no-restricted-syntax` on `setInterval(...)`; test paths only |
@@ -295,7 +331,7 @@ Then run `ast-grep scan`. Each logical rule includes TypeScript, JavaScript/JSX,
 | `no-test-dynamic-await-import` | `no-test-dynamic-await-import.yml` | ESLint `no-restricted-syntax` on `await import(...)` (through `as`, `satisfies` and parentheses); test paths only |
 | `no-test-bun-sleep` | `no-test-bun-sleep.yml` | ESLint `no-restricted-syntax` on `Bun.sleep(...)`; test paths only |
 
-The `sonar-*` rules are purely syntactic and match without type information. A consumer that only wants directive policy should copy the five directive files (`eslint-disable-*` and `directive-*`) instead of adding the whole directory.
+The directory contains 25 logical rules (75 language variants): five directive checks, seven SonarJS syntax ports, four literal security tripwires and nine generic syntax bans. The `sonar-*` and `security-*` rules are purely syntactic and match without type information. A consumer that only wants directive policy should copy the five directive files (`eslint-disable-*` and `directive-*`) instead of adding the whole directory.
 
 #### Directive policy (no eslint-comments plugin)
 
@@ -332,7 +368,7 @@ Suppress one site with the id in an ast-grep comment, as for any ast-grep rule: 
 Rule inventory and differences
 ------------------------------
 
-The port uses the effective rule ids and options from the shared ESLint config itself, not consumer-local additions. The native/sonar-regexp/others mapping evidence determines native renames and compatibility adapters. `rules.mjs` groups the single-source data by origin. Severities are preserved except where explicitly noted below.
+The port uses the effective rule ids and options from the shared ESLint config itself, not consumer-local additions. The native/regexp/other-plugin mapping evidence determines native renames and compatibility adapters. `rules.mjs` groups the single-source data by origin. Severities are preserved except where explicitly noted below.
 
 | Source | JavaScript | TypeScript |
 | --- | ---: | ---: |
@@ -343,14 +379,13 @@ The port uses the effective rule ids and options from the shared ESLint config i
 | Native node / n-js | 5 / 10 | 5 / 10 |
 | Native promise | 11 | 11 |
 | eslint-core wrapper | 2 | 1 |
-| sonarjs core (non-test files) | 38 | 38 |
 | regexp | 61 | 61 |
 | @stylistic | 67 | 67 |
 | test-hygiene | 4 | 4 |
 | module-boundaries wrapper | 2 | 2 |
-| **Total active rules (ordinary source files)** | **451** | **504** |
+| **Total active rules (ordinary source files)** | **413** | **466** |
 
-Test overrides disable 15 rules for TS tests and swap the sonarjs core for its 13 test-file rules; shared JS test relaxations are also applied. Optional lodash adds 23 rules; optional bunTest adds 11; the sonarjs opt-in groups add 17, 28, 16, 14 and 25.
+Test overrides disable 11 active rules for TS tests; shared JS test relaxations are also applied. Optional lodash adds 23 rules; optional bunTest adds 12. The 25 ast-grep logical rules run separately and are not included in the Oxlint totals.
 
 Explicit compatibility differences:
 
@@ -361,39 +396,7 @@ Explicit compatibility differences:
 - The eslint-comments plugin is removed. Native unused-directive reporting plus five ast-grep directive rules enforce the stricter header-only/no-enable policy above; duplicate disables are not exactly covered.
 - Generic `n/no-missing-import` and `n/no-unpublished-import`, disabled in the first consumer's local ESLint config, are retained as `n-js/*`. Node resolution may not understand Bun's extensionless TS imports and aliases; the generic ESLint config has the same limitation. Configure or disable these in a Bun consumer; the shared package does not impose a consumer-specific resolver.
 
-The following **27 generic SonarJS rule ids are never enabled** (silent without types, except unsafe `void-use`). On TS files, `deprecation` is replaced by native `typescript/no-deprecated`, and `no-alphabetical-sort` by native `typescript/require-array-sort-compare` with `ignoreStringArrays: false`. Those two replacements preserve typed coverage but do not restore JS-only coverage. The remaining 25 have no full replacement:
-
-```text
-sonarjs/deprecation
-sonarjs/no-ignored-return
-sonarjs/null-dereference
-sonarjs/no-selector-parameter
-sonarjs/index-of-compare-to-positive-number
-sonarjs/post-message
-sonarjs/no-array-delete
-sonarjs/no-alphabetical-sort
-sonarjs/new-operator-misuse
-sonarjs/different-types-comparison
-sonarjs/no-associative-arrays
-sonarjs/void-use
-sonarjs/argument-type
-sonarjs/in-operator-type-error
-sonarjs/array-callback-without-return
-sonarjs/function-return-type
-sonarjs/no-misleading-array-reverse
-sonarjs/no-useless-intersection
-sonarjs/no-in-misuse
-sonarjs/no-try-promise
-sonarjs/disabled-resource-integrity
-sonarjs/unused-named-groups
-sonarjs/existing-groups
-sonarjs/jsx-no-leaked-render
-sonarjs/prefer-regexp-exec
-sonarjs/prefer-read-only-props
-sonarjs/no-async-constructor
-```
-
-Some have native, regexp, or compiler overlap; none is falsely enabled as though full typed coverage survived. Beyond those, the SonarJS rules that earlier versions of this package enabled and that now sit in no default are exactly the ones in the opt-in groups and the tables above. `package.json` is linted by ESLint through the `package-json` subpath, not reproduced in Oxlint.
+TypeScript overrides repeat base options when only severity is intended to change: Oxlint resets options on a severity-only override. In particular, `no-shadow` shares its base options in JS and TS; `builtinGlobals` remains false. `package.json` is linted by ESLint through the `package-json` subpath, not reproduced in Oxlint.
 
 Development
 -----------
@@ -406,7 +409,7 @@ bun run lint
 bun pm pack --dry-run
 ```
 
-Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, like `bun link` without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and every optional export (including a two-layer `boundaries` project, one forbidden and one allowed import, run in the repeated multi-file run, and the `package-json` ESLint config against good, bad, private and duplicate-key manifests), a clean file, warning exit behavior, inherited TS/test overrides, inherited type-aware mode, which root fields inherit (a probe package), the sonarjs core scoping and every opt-in group, the sonarjs reliability wrapper (six repeated multi-file runs), the sonarjs rule partition (every rule is enabled in exactly one place or listed as dropped with a verified replacement), and every ast-grep rule (bad sample matches, good sample does not; the nine generic bans are scanned through a real `ruleDirs` sgconfig in every conventional test and source location, for each TypeScript, JavaScript and TSX extension, with exact matched lines and messages). Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; consumer integration tests exercise the distributed, stricter configuration. The suite also packs the package and installs its payload as a real directory (not a symlink) in a second temporary consumer: the README config plus `defineBoundaries` must have no unsafe type-aware findings, a deliberate unsafe sentinel must be reported, consumer TypeScript checks must pass (including negative cases), and packed declarations must match runtime exports. `bun run build:types` uses tsrs declaration-only emit from the `.mjs` sources and their JSDoc via `tsconfig.types.json`. Generated `.d.mts` files are git-ignored, never hand-written or committed. JavaScript source checking is not enabled; there is no mutation-test setup.
+Tests invoke Oxlint under **Node**, never Bun (Bun truncates piped output at 64 KiB). A temporary consumer imports the package by its bare name through a local symlink, without global registration. Set `TEST_PACKAGE_ROOT` to an independently installed package directory to run the same suite against an unpacked npm payload. Fixtures cover every native/plugin source and optional export, a two-layer `boundaries` project (one forbidden and one allowed import), the `package-json` ESLint config (good, bad, private and duplicate-key manifests), clean diagnostics, warning exit behavior, inherited TS/test overrides, type-aware mode and root-field inheritance. Regression checks require SonarJS to be absent, verify `bun:test` assertion checking and compare JS/TS `no-shadow` options using `--print-config`. Every ast-grep rule has bad/clean samples; the generic bans and six new port/tripwire fixtures run through a real installed `ruleDirs` sgconfig across all eight supported extensions and conventional test/source locations, comparing exact lines, language ids and severity. The README must name every shipped rule file. Missing ast-grep produces a visible skip. The suite takes seconds, not minutes. Package maintenance lint uses native correctness/suspicious checks; integration tests exercise the distributed config. A second consumer installs the packed payload as a real directory (not a symlink): the README config plus `defineBoundaries` must have no unsafe type-aware findings, an unsafe sentinel must be reported, TypeScript positive/negative checks must pass, and packed declarations must match runtime exports, including the internal `rules.mjs` data module. `bun run build:types` and prepack use the Node-only `build-types.mjs` helper to remove the three generated outputs before tsrs declaration-only emit from `.mjs` sources and JSDoc via `tsconfig.types.json`; adjacent stale declarations must not shadow the sources during later builds. Generated `.d.mts` files are git-ignored, never hand-written or committed. JavaScript source checking is not enabled; there is no mutation-test setup.
 
 Releases
 --------

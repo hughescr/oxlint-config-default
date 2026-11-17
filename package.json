@@ -32,9 +32,9 @@
   "sideEffects": false,
   "scripts": {
     "test": "bun test/self-check.mjs",
-    "build:types": "node node_modules/tsrs/bin/tsrs -p tsconfig.types.json",
-    "prepack": "node node_modules/tsrs/bin/tsrs -p tsconfig.types.json",
-    "lint": "node node_modules/oxlint/bin/oxlint -c oxlint.config.ts --deny-warnings index.mjs package-json.mjs rules.mjs plugins test/self-check.mjs",
+    "build:types": "node build-types.mjs",
+    "prepack": "node build-types.mjs",
+    "lint": "node node_modules/oxlint/bin/oxlint -c oxlint.config.ts --deny-warnings build-types.mjs index.mjs package-json.mjs rules.mjs plugins test/self-check.mjs",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge main"
   },
   "peerDependencies": {
@@ -56,7 +56,6 @@
     "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-package-json": "^1.14.0",
     "eslint-plugin-regexp": "^3.1.0",
-    "eslint-plugin-sonarjs": "4.2.2",
     "eslint-plugin-unicorn": "^64.0.0",
     "typescript": "^6.0.3"
   },

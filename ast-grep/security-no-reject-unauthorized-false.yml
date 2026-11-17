@@ -1,0 +1,336 @@
+id: security-no-reject-unauthorized-false
+language: typescript
+severity: error
+message: "Literal TLS verification disabling permits untrusted certificates. Keep rejectUnauthorized enabled and remove NODE_TLS_REJECT_UNAUTHORIZED=0; configure a trusted CA instead. Suppress a justified case with // ast-grep-ignore: security-no-reject-unauthorized-false -- reason"
+note: |
+  Literal-only tripwire for part of sonarjs/unverified-certificate, not a semantic replacement.
+  Object properties are checked regardless of the API receiving the object. Covers a plain, quoted
+  or literal-computed rejectUnauthorized key whose value is the literal false, and assignment (=, ||=, ??=)
+  of '0', "0", `0` or 0 to process.env.NODE_TLS_REJECT_UNAUTHORIZED in member or bracket form.
+  Parentheses, as/satisfies casts and non-null assertions around the value, the target or process.env are
+  traversed; calls, conditionals and type nodes are not. Also accepts globalThis.process.
+  No alias, constant or spread resolution; computed keys that are not literals, template substitutions,
+  other spellings of zero, Object.assign(process.env, {...}) and JSX attributes are not covered.
+  Non-test source files only.
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+      - kind: type_assertion
+  reject-key:
+    any:
+      - regex: '^[''"]?rejectUnauthorized[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"]rejectUnauthorized[''"]$'
+            - kind: template_string
+              regex: '^`rejectUnauthorized`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  false-value:
+    any:
+      - kind: 'false'
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              kind: 'false'
+              stopBy:
+                not: { matches: transparent-wrapper }
+  zero-literal:
+    any:
+      - kind: number
+        regex: '^0$'
+      - kind: string
+        regex: '^[''"]0[''"]$'
+      - kind: template_string
+        regex: '^`0`$'
+  zero-value:
+    any:
+      - matches: zero-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: zero-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+  env-bare:
+    any:
+      - pattern: process.env
+      - pattern: process['env']
+      - pattern: process["env"]
+      - pattern: globalThis.process.env
+      - pattern: globalThis.process['env']
+      - pattern: globalThis.process["env"]
+  env-ref:
+    any:
+      - matches: env-bare
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: env-bare
+              stopBy:
+                not: { matches: transparent-wrapper }
+  env-target-bare:
+    any:
+      - all:
+          - kind: member_expression
+          - has: { field: object, matches: env-ref }
+          - has: { field: property, regex: '^NODE_TLS_REJECT_UNAUTHORIZED$' }
+      - all:
+          - kind: subscript_expression
+          - has: { field: object, matches: env-ref }
+          - has:
+              field: index
+              any:
+                - kind: string
+                  regex: '^[''"]NODE_TLS_REJECT_UNAUTHORIZED[''"]$'
+                - kind: template_string
+                  regex: '^`NODE_TLS_REJECT_UNAUTHORIZED`$'
+  env-target:
+    any:
+      - matches: env-target-bare
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: env-target-bare
+              stopBy:
+                not: { matches: transparent-wrapper }
+rule:
+  any:
+    - all:
+        - kind: pair
+        - has: { field: key, matches: reject-key }
+        - has: { field: value, matches: false-value }
+    - all:
+        - kind: assignment_expression
+        - has: { field: left, matches: env-target }
+        - has: { field: right, matches: zero-value }
+    - all:
+        - kind: augmented_assignment_expression
+        - has: { field: operator, regex: '^(\|\|=|\?\?=)$' }
+        - has: { field: left, matches: env-target }
+        - has: { field: right, matches: zero-value }
+---
+id: security-no-reject-unauthorized-false-javascript
+language: javascript
+severity: error
+message: "Literal TLS verification disabling permits untrusted certificates. Keep rejectUnauthorized enabled and remove NODE_TLS_REJECT_UNAUTHORIZED=0; configure a trusted CA instead. Suppress a justified case with // ast-grep-ignore: security-no-reject-unauthorized-false-javascript -- reason"
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-wrapper:
+    kind: parenthesized_expression
+  reject-key:
+    any:
+      - regex: '^[''"]?rejectUnauthorized[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"]rejectUnauthorized[''"]$'
+            - kind: template_string
+              regex: '^`rejectUnauthorized`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  false-value:
+    any:
+      - kind: 'false'
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              kind: 'false'
+              stopBy:
+                not: { matches: transparent-wrapper }
+  zero-literal:
+    any:
+      - kind: number
+        regex: '^0$'
+      - kind: string
+        regex: '^[''"]0[''"]$'
+      - kind: template_string
+        regex: '^`0`$'
+  zero-value:
+    any:
+      - matches: zero-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: zero-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+  env-bare:
+    any:
+      - pattern: process.env
+      - pattern: process['env']
+      - pattern: process["env"]
+      - pattern: globalThis.process.env
+      - pattern: globalThis.process['env']
+      - pattern: globalThis.process["env"]
+  env-ref:
+    any:
+      - matches: env-bare
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: env-bare
+              stopBy:
+                not: { matches: transparent-wrapper }
+  env-target-bare:
+    any:
+      - all:
+          - kind: member_expression
+          - has: { field: object, matches: env-ref }
+          - has: { field: property, regex: '^NODE_TLS_REJECT_UNAUTHORIZED$' }
+      - all:
+          - kind: subscript_expression
+          - has: { field: object, matches: env-ref }
+          - has:
+              field: index
+              any:
+                - kind: string
+                  regex: '^[''"]NODE_TLS_REJECT_UNAUTHORIZED[''"]$'
+                - kind: template_string
+                  regex: '^`NODE_TLS_REJECT_UNAUTHORIZED`$'
+  env-target:
+    any:
+      - matches: env-target-bare
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: env-target-bare
+              stopBy:
+                not: { matches: transparent-wrapper }
+rule:
+  any:
+    - all:
+        - kind: pair
+        - has: { field: key, matches: reject-key }
+        - has: { field: value, matches: false-value }
+    - all:
+        - kind: assignment_expression
+        - has: { field: left, matches: env-target }
+        - has: { field: right, matches: zero-value }
+    - all:
+        - kind: augmented_assignment_expression
+        - has: { field: operator, regex: '^(\|\|=|\?\?=)$' }
+        - has: { field: left, matches: env-target }
+        - has: { field: right, matches: zero-value }
+---
+id: security-no-reject-unauthorized-false-tsx
+language: tsx
+severity: error
+message: "Literal TLS verification disabling permits untrusted certificates. Keep rejectUnauthorized enabled and remove NODE_TLS_REJECT_UNAUTHORIZED=0; configure a trusted CA instead. Suppress a justified case with // ast-grep-ignore: security-no-reject-unauthorized-false-tsx -- reason"
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+  reject-key:
+    any:
+      - regex: '^[''"]?rejectUnauthorized[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"]rejectUnauthorized[''"]$'
+            - kind: template_string
+              regex: '^`rejectUnauthorized`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  false-value:
+    any:
+      - kind: 'false'
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              kind: 'false'
+              stopBy:
+                not: { matches: transparent-wrapper }
+  zero-literal:
+    any:
+      - kind: number
+        regex: '^0$'
+      - kind: string
+        regex: '^[''"]0[''"]$'
+      - kind: template_string
+        regex: '^`0`$'
+  zero-value:
+    any:
+      - matches: zero-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: zero-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+  env-bare:
+    any:
+      - pattern: process.env
+      - pattern: process['env']
+      - pattern: process["env"]
+      - pattern: globalThis.process.env
+      - pattern: globalThis.process['env']
+      - pattern: globalThis.process["env"]
+  env-ref:
+    any:
+      - matches: env-bare
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: env-bare
+              stopBy:
+                not: { matches: transparent-wrapper }
+  env-target-bare:
+    any:
+      - all:
+          - kind: member_expression
+          - has: { field: object, matches: env-ref }
+          - has: { field: property, regex: '^NODE_TLS_REJECT_UNAUTHORIZED$' }
+      - all:
+          - kind: subscript_expression
+          - has: { field: object, matches: env-ref }
+          - has:
+              field: index
+              any:
+                - kind: string
+                  regex: '^[''"]NODE_TLS_REJECT_UNAUTHORIZED[''"]$'
+                - kind: template_string
+                  regex: '^`NODE_TLS_REJECT_UNAUTHORIZED`$'
+  env-target:
+    any:
+      - matches: env-target-bare
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: env-target-bare
+              stopBy:
+                not: { matches: transparent-wrapper }
+rule:
+  any:
+    - all:
+        - kind: pair
+        - has: { field: key, matches: reject-key }
+        - has: { field: value, matches: false-value }
+    - all:
+        - kind: assignment_expression
+        - has: { field: left, matches: env-target }
+        - has: { field: right, matches: zero-value }
+    - all:
+        - kind: augmented_assignment_expression
+        - has: { field: operator, regex: '^(\|\|=|\?\?=)$' }
+        - has: { field: left, matches: env-target }
+        - has: { field: right, matches: zero-value }

@@ -1,0 +1,172 @@
+id: sonar-no-internal-api-use
+language: typescript
+severity: error
+message: "Module specifier reaches into node_modules. Use the package's public entry point or documented exports subpath. Suppress a justified deep import with `// ast-grep-ignore: sonar-no-internal-api-use -- reason`."
+note: |
+  Port of sonarjs/no-internal-api-use, extended to export-from and import() (including type imports).
+  Applies to all files. Match direct quoted strings and substitution-free templates, through
+  parentheses and TypeScript assertions only; never search nested calls, concatenations or
+  template substitutions. Optional bare require calls are included; receiver methods and
+  aliased/computed specifiers are knowingly not covered. Report the whole statement or call.
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+      - kind: type_assertion
+  literal-specifier:
+    all:
+      - regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)'
+      - any:
+          - kind: string
+          - kind: template_string
+            not:
+              has: { kind: template_substitution }
+  specifier:
+    any:
+      - matches: literal-specifier
+      - matches: transparent-wrapper
+        has:
+          matches: literal-specifier
+          stopBy:
+            not: { matches: transparent-wrapper }
+  bare-loader:
+    any:
+      - kind: import
+      - kind: identifier
+        regex: '^require$'
+      - matches: transparent-wrapper
+        has:
+          kind: identifier
+          regex: '^require$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+rule:
+  any:
+    - kind: import_statement
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: export_statement
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: import_require_clause
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: call_expression
+      all:
+        - has: { field: function, matches: bare-loader }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: specifier
+---
+id: sonar-no-internal-api-use-javascript
+language: javascript
+severity: error
+message: "Module specifier reaches into node_modules. Use the package's public entry point or documented exports subpath. Suppress a justified deep import with `// ast-grep-ignore: sonar-no-internal-api-use-javascript -- reason`."
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+  literal-specifier:
+    all:
+      - regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)'
+      - any:
+          - kind: string
+          - kind: template_string
+            not:
+              has: { kind: template_substitution }
+  specifier:
+    any:
+      - matches: literal-specifier
+      - matches: transparent-wrapper
+        has:
+          matches: literal-specifier
+          stopBy:
+            not: { matches: transparent-wrapper }
+  bare-loader:
+    any:
+      - kind: import
+      - kind: identifier
+        regex: '^require$'
+      - matches: transparent-wrapper
+        has:
+          kind: identifier
+          regex: '^require$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+rule:
+  any:
+    - kind: import_statement
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: export_statement
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: call_expression
+      all:
+        - has: { field: function, matches: bare-loader }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: specifier
+---
+id: sonar-no-internal-api-use-tsx
+language: tsx
+severity: error
+message: "Module specifier reaches into node_modules. Use the package's public entry point or documented exports subpath. Suppress a justified deep import with `// ast-grep-ignore: sonar-no-internal-api-use-tsx -- reason`."
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+  literal-specifier:
+    all:
+      - regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)'
+      - any:
+          - kind: string
+          - kind: template_string
+            not:
+              has: { kind: template_substitution }
+  specifier:
+    any:
+      - matches: literal-specifier
+      - matches: transparent-wrapper
+        has:
+          matches: literal-specifier
+          stopBy:
+            not: { matches: transparent-wrapper }
+  bare-loader:
+    any:
+      - kind: import
+      - kind: identifier
+        regex: '^require$'
+      - matches: transparent-wrapper
+        has:
+          kind: identifier
+          regex: '^require$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+rule:
+  any:
+    - kind: import_statement
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: export_statement
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: import_require_clause
+      has: { field: source, kind: string, regex: '(^[\x27"`]|[/\\])node_modules([/\\]|[\x27"`]$)' }
+    - kind: call_expression
+      all:
+        - has: { field: function, matches: bare-loader }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: specifier

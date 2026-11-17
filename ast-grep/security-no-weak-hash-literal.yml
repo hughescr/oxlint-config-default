@@ -1,0 +1,414 @@
+id: security-no-weak-hash-literal
+language: typescript
+severity: error
+message: "Weak hash algorithm passed as a string literal to createHash()/crypto.subtle.digest() (MD2/4/5/6, HAVAL-128, DSA, RIPEMD, SHA-1). Use SHA-256 or stronger; if the weak hash is required by an external protocol or is non-security (a cache key, a directory name), suppress this site with `// ast-grep-ignore: security-no-weak-hash-literal -- reason`."
+note: |
+  Literal-only tripwire, not data-flow analysis. Parentheses, type assertions, non-null assertions,
+  optional chaining and literal bracket properties are supported. Traversal stops at every other
+  expression kind so nested literals cannot be mistaken for the first argument. WebCrypto also
+  accepts a direct object literal with a weak literal name property (not nested objects).
+  Algorithms are the sonarjs hashing list plus hyphenated forms and OpenSSL aliases including
+  md5WithRSAEncryption, sha1WithRSAEncryption, md5-sha1, ssl3-md5, ssl3-sha1, RSA-MD5,
+  RSA-SHA1, RSA-SHA1-2, RSA-RIPEMD160, ripemd-160, ripemd160WithRSA and rmd160 (case-insensitive). Constants, renamed functions, dynamic properties, spreads,
+  bind/call/apply and other hashing APIs are knowingly not covered. Non-test source files only.
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-expression:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+      - kind: type_assertion
+  weak-literal:
+    any:
+      - kind: string
+      - kind: template_string
+    regex: '(?i)^[\x27"`](md[2456]|haval-?128|hmac-?md5|dsa|ripemd(-?(128|160))?|rmd160|hmac-?ripemd160|ripemd160withrsa|sha-?1|md5withrsaencryption|sha1withrsaencryption|md5-sha1|ssl3-(md5|sha1)|rsa-md5|rsa-ripemd160|rsa-sha1(-2)?)[\x27"`]$'
+  weak-argument:
+    any:
+      - matches: weak-literal
+      - matches: transparent-expression
+        has:
+          matches: weak-literal
+          stopBy:
+            not:
+              matches: transparent-expression
+  subtle-member:
+    any:
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^subtle$'
+      - kind: subscript_expression
+        has:
+          field: index
+          any:
+            - kind: string
+            - kind: template_string
+          regex: '^[\x27"`]subtle[\x27"`]$'
+  subtle-object:
+    any:
+      - matches: subtle-member
+      - matches: transparent-expression
+        has:
+          matches: subtle-member
+          stopBy:
+            not:
+              matches: transparent-expression
+  hash-function:
+    any:
+      - kind: identifier
+        regex: '^createHash$'
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^createHash$'
+      - kind: subscript_expression
+        has:
+          field: index
+          any:
+            - kind: string
+            - kind: template_string
+          regex: '^[\x27"`]createHash[\x27"`]$'
+      - matches: subtle-digest-function
+  subtle-digest-function:
+    any:
+      - any:
+          - kind: member_expression
+            has:
+              field: property
+              regex: '^digest$'
+          - kind: subscript_expression
+            has:
+              field: index
+              any:
+                - kind: string
+                - kind: template_string
+              regex: '^[\x27"`]digest[\x27"`]$'
+        has:
+          field: object
+          matches: subtle-object
+  weak-name-object:
+    kind: object
+    has:
+      kind: pair
+      all:
+        - has:
+            field: key
+            any:
+              - kind: property_identifier
+                regex: '^name$'
+              - kind: string
+                regex: '^[\x27"]name[\x27"]$'
+        - has:
+            field: value
+            matches: weak-argument
+rule:
+  kind: call_expression
+  any:
+    - all:
+        - has:
+            field: function
+            any:
+              - matches: hash-function
+              - matches: transparent-expression
+                has:
+                  matches: hash-function
+                  stopBy:
+                    not: { matches: transparent-expression }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: weak-argument
+    - all:
+        - has:
+            field: function
+            any:
+              - matches: subtle-digest-function
+              - matches: transparent-expression
+                has:
+                  matches: subtle-digest-function
+                  stopBy:
+                    not: { matches: transparent-expression }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: weak-name-object
+---
+id: security-no-weak-hash-literal-javascript
+language: javascript
+severity: error
+message: "Weak hash algorithm passed as a string literal to createHash()/crypto.subtle.digest() (MD2/4/5/6, HAVAL-128, DSA, RIPEMD, SHA-1). Use SHA-256 or stronger; if the weak hash is required by an external protocol or is non-security (a cache key, a directory name), suppress this site with `// ast-grep-ignore: security-no-weak-hash-literal-javascript -- reason`."
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-expression:
+    any:
+      - kind: parenthesized_expression
+  weak-literal:
+    any:
+      - kind: string
+      - kind: template_string
+    regex: '(?i)^[\x27"`](md[2456]|haval-?128|hmac-?md5|dsa|ripemd(-?(128|160))?|rmd160|hmac-?ripemd160|ripemd160withrsa|sha-?1|md5withrsaencryption|sha1withrsaencryption|md5-sha1|ssl3-(md5|sha1)|rsa-md5|rsa-ripemd160|rsa-sha1(-2)?)[\x27"`]$'
+  weak-argument:
+    any:
+      - matches: weak-literal
+      - matches: transparent-expression
+        has:
+          matches: weak-literal
+          stopBy:
+            not:
+              matches: transparent-expression
+  subtle-member:
+    any:
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^subtle$'
+      - kind: subscript_expression
+        has:
+          field: index
+          any:
+            - kind: string
+            - kind: template_string
+          regex: '^[\x27"`]subtle[\x27"`]$'
+  subtle-object:
+    any:
+      - matches: subtle-member
+      - matches: transparent-expression
+        has:
+          matches: subtle-member
+          stopBy:
+            not:
+              matches: transparent-expression
+  hash-function:
+    any:
+      - kind: identifier
+        regex: '^createHash$'
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^createHash$'
+      - kind: subscript_expression
+        has:
+          field: index
+          any:
+            - kind: string
+            - kind: template_string
+          regex: '^[\x27"`]createHash[\x27"`]$'
+      - matches: subtle-digest-function
+  subtle-digest-function:
+    any:
+      - any:
+          - kind: member_expression
+            has:
+              field: property
+              regex: '^digest$'
+          - kind: subscript_expression
+            has:
+              field: index
+              any:
+                - kind: string
+                - kind: template_string
+              regex: '^[\x27"`]digest[\x27"`]$'
+        has:
+          field: object
+          matches: subtle-object
+  weak-name-object:
+    kind: object
+    has:
+      kind: pair
+      all:
+        - has:
+            field: key
+            any:
+              - kind: property_identifier
+                regex: '^name$'
+              - kind: string
+                regex: '^[\x27"]name[\x27"]$'
+        - has:
+            field: value
+            matches: weak-argument
+rule:
+  kind: call_expression
+  any:
+    - all:
+        - has:
+            field: function
+            any:
+              - matches: hash-function
+              - matches: transparent-expression
+                has:
+                  matches: hash-function
+                  stopBy:
+                    not: { matches: transparent-expression }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: weak-argument
+    - all:
+        - has:
+            field: function
+            any:
+              - matches: subtle-digest-function
+              - matches: transparent-expression
+                has:
+                  matches: subtle-digest-function
+                  stopBy:
+                    not: { matches: transparent-expression }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: weak-name-object
+---
+id: security-no-weak-hash-literal-tsx
+language: tsx
+severity: error
+message: "Weak hash algorithm passed as a string literal to createHash()/crypto.subtle.digest() (MD2/4/5/6, HAVAL-128, DSA, RIPEMD, SHA-1). Use SHA-256 or stronger; if the weak hash is required by an external protocol or is non-security (a cache key, a directory name), suppress this site with `// ast-grep-ignore: security-no-weak-hash-literal-tsx -- reason`."
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-expression:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+  weak-literal:
+    any:
+      - kind: string
+      - kind: template_string
+    regex: '(?i)^[\x27"`](md[2456]|haval-?128|hmac-?md5|dsa|ripemd(-?(128|160))?|rmd160|hmac-?ripemd160|ripemd160withrsa|sha-?1|md5withrsaencryption|sha1withrsaencryption|md5-sha1|ssl3-(md5|sha1)|rsa-md5|rsa-ripemd160|rsa-sha1(-2)?)[\x27"`]$'
+  weak-argument:
+    any:
+      - matches: weak-literal
+      - matches: transparent-expression
+        has:
+          matches: weak-literal
+          stopBy:
+            not:
+              matches: transparent-expression
+  subtle-member:
+    any:
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^subtle$'
+      - kind: subscript_expression
+        has:
+          field: index
+          any:
+            - kind: string
+            - kind: template_string
+          regex: '^[\x27"`]subtle[\x27"`]$'
+  subtle-object:
+    any:
+      - matches: subtle-member
+      - matches: transparent-expression
+        has:
+          matches: subtle-member
+          stopBy:
+            not:
+              matches: transparent-expression
+  hash-function:
+    any:
+      - kind: identifier
+        regex: '^createHash$'
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^createHash$'
+      - kind: subscript_expression
+        has:
+          field: index
+          any:
+            - kind: string
+            - kind: template_string
+          regex: '^[\x27"`]createHash[\x27"`]$'
+      - matches: subtle-digest-function
+  subtle-digest-function:
+    any:
+      - any:
+          - kind: member_expression
+            has:
+              field: property
+              regex: '^digest$'
+          - kind: subscript_expression
+            has:
+              field: index
+              any:
+                - kind: string
+                - kind: template_string
+              regex: '^[\x27"`]digest[\x27"`]$'
+        has:
+          field: object
+          matches: subtle-object
+  weak-name-object:
+    kind: object
+    has:
+      kind: pair
+      all:
+        - has:
+            field: key
+            any:
+              - kind: property_identifier
+                regex: '^name$'
+              - kind: string
+                regex: '^[\x27"]name[\x27"]$'
+        - has:
+            field: value
+            matches: weak-argument
+rule:
+  kind: call_expression
+  any:
+    - all:
+        - has:
+            field: function
+            any:
+              - matches: hash-function
+              - matches: transparent-expression
+                has:
+                  matches: hash-function
+                  stopBy:
+                    not: { matches: transparent-expression }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: weak-argument
+    - all:
+        - has:
+            field: function
+            any:
+              - matches: subtle-digest-function
+              - matches: transparent-expression
+                has:
+                  matches: subtle-digest-function
+                  stopBy:
+                    not: { matches: transparent-expression }
+        - has:
+            field: arguments
+            has:
+              nthChild:
+                position: 1
+                ofRule: { not: { kind: comment } }
+              matches: weak-name-object

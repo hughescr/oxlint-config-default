@@ -3,7 +3,6 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, lstatSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -13,7 +12,32 @@ const consumer = mkdtempSync(join(tmpdir(), 'oxlint-config-consumer-'));
 const started = performance.now();
 const pkg = await import(pathToFileURL(join(packageRoot, 'index.mjs')).href);
 const data = await import(pathToFileURL(join(packageRoot, 'rules.mjs')).href);
-const sonarPlugin = createRequire(join(packageRoot, 'index.mjs'))('eslint-plugin-sonarjs');
+assert.ok(!Object.keys(pkg).some(name => name.startsWith('sonarjs')), 'SonarJS exports must be removed');
+assert.ok(!Object.keys(data).some(name => name.startsWith('sonarjs')), 'SonarJS rule data must be removed');
+const packageManifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+assert.ok(!packageManifest.dependencies['eslint-plugin-sonarjs'], 'SonarJS must not be installed');
+assert.ok(!existsSync(join(packageRoot, 'plugins/sonarjs-oxlint.mjs')), 'SonarJS wrapper must be removed');
+assert.ok(!JSON.stringify(pkg.default).includes('sonarjs'), 'default must not load SonarJS');
+// The retired 47-rule default core from 0.9.1, not the former opt-in groups.
+const retiredSonarjsCore = `no-floating-point-equality no-hardcoded-ip no-identical-expressions no-duplicated-branches
+    misplaced-loop-counter no-globals-shadowing pseudo-random no-ignored-exceptions file-permissions
+    non-existent-operator no-invariant-returns inconsistent-function-call no-use-of-empty-return-value
+    no-all-duplicated-branches no-unused-collection no-element-overwrite no-empty-collection weak-ssl
+    no-weak-keys unverified-certificate no-clear-text-protocols publicly-writable-directories
+    unverified-hostname encryption-secure-mode no-weak-cipher stateful-regex redundant-type-aliases
+    memoize-cache-key avoid-mutating-nested-properties-of-shallow-clones anchor-precedence
+    cognitive-complexity regex-complexity no-hardcoded-passwords no-hardcoded-secrets
+    no-os-command-from-path hashing no-internal-api-use no-identical-functions
+    no-empty-test-file no-incomplete-assertions inverted-assertion-arguments parameterized-tests
+    no-trivial-assertions async-test-assertions explicit-test-skip no-empty-parameterized-test-dataset
+    no-duplicate-parameterized-test-case`.split(/\s+/u);
+assert.equal(retiredSonarjsCore.length, 47);
+const coverageReadme = readFileSync(join(packageRoot, 'README.md'), 'utf8');
+const replacementRows = coverageReadme.split('\n').filter(line => line.startsWith('| `sonarjs/')).map(line => line.split('|')[1]).join('\n');
+const noReplacementList = coverageReadme.match(/### Former core rules with no replacement\n([\s\S]*?)(?=\n### |$)/u)?.[1] ?? '';
+for (const id of retiredSonarjsCore) {
+    assert.ok(`${replacementRows}\n${noReplacementList}`.includes(`\`sonarjs/${id}\``), `README missing retired core rule sonarjs/${id}`);
+}
 function put(name, text) {
     const filename = join(consumer, name);
     mkdirSync(join(filename, '..'), { recursive: true });
@@ -196,106 +220,6 @@ export { setTimeoutName };
 // Conventional test locations: directories named tests/test/__tests__ at any depth and *.test.* / *.spec.* files.
 const testLocations = (id, extension) => [`tests/${id}/flagged.${extension}`, `tests/fixtures/${id}.${extension}`, `test/${id}.${extension}`, `__tests__/${id}.${extension}`, `packages/a/tests/${id}.${extension}`, `src/${id}.test.${extension}`, `src/${id}.spec.${extension}`];
 const sourceLocations = (id, extension) => [`src/${id}/flagged.${extension}`, `lib/${id}.${extension}`, `scripts/${id}.${extension}`, `${id}.${extension}`, `contest/${id}.${extension}`, `latest/${id}.${extension}`];
-const testGlobs = ['**/*.{test,spec}.{js,cjs,mjs,jsx,ts,cts,mts,tsx}'];
-const sonarBlocks = { sonarjs: pkg.sonarjs, sonarjsAws: pkg.sonarjsAws, sonarjsWeb: pkg.sonarjsWeb, sonarjsFrameworks: pkg.sonarjsFrameworks, sonarjsTestTooling: pkg.sonarjsTestTooling, sonarjsStyle: pkg.sonarjsStyle };
-const sonarName = key => (key.startsWith('sonarjs/') ? key.slice('sonarjs/'.length) : undefined);
-const isOn = value => (Array.isArray(value) ? value[0] : value) !== 'off';
-/** Enabled sonarjs rule names in a rules map. */
-const onNames = rules => Object.entries(rules ?? {}).filter(([key, value]) => sonarName(key) && isOn(value)).map(([key]) => sonarName(key));
-const blockNames = block => new Set([...onNames(block.rules), ...(block.overrides ?? []).flatMap(override => onNames(override.rules))]);
-
-/** Contract checks that need no Oxlint run: exports, rule partition, scoping data, wrapper wiring, README coverage. */
-function checkSonarContract() {
-    // Every sonarjs block loads the plugin through the same reliability wrapper, never the stock plugin.
-    for (const [name, block] of Object.entries(sonarBlocks)) {
-        assert.ok(block, `missing export ${name}`);
-        assert.equal(block.jsPlugins.length, 1, name);
-        assert.equal(block.jsPlugins[0].name, 'sonarjs', name);
-        assert.ok(isAbsolute(block.jsPlugins[0].specifier) && block.jsPlugins[0].specifier.endsWith('plugins/sonarjs-oxlint.mjs'), `${name} must use the wrapper: ${block.jsPlugins[0].specifier}`);
-    }
-    assert.ok(pkg.default.jsPlugins.some(plugin => plugin.name === 'sonarjs' && plugin.specifier === pkg.sonarjs.jsPlugins[0].specifier));
-    const pluginRules = new Set(Object.keys(sonarPlugin.rules));
-    const core = blockNames(pkg.sonarjs);
-    assert.equal(core.size, 47, 'core is the 47 keep rules');
-    // Scoping: general rules on non-test files, test-semantic rules on test files, four on both.
-    const baseOn = new Set(onNames(pkg.sonarjs.rules));
-    const testOverride = pkg.sonarjs.overrides.find(override => JSON.stringify(override.files) === JSON.stringify(testGlobs));
-    assert.ok(testOverride, 'core has a test-file override using the package test globs');
-    const testOn = new Set(onNames(testOverride.rules));
-    const both = [...baseOn].filter(name => testOn.has(name)).toSorted();
-    assert.deepEqual(both, ['hashing', 'no-identical-functions', 'no-internal-api-use', 'no-os-command-from-path']);
-    assert.equal(baseOn.size, 38);
-    assert.equal(testOn.size, 13);
-    for (const name of baseOn) {
-        if (!both.includes(name)) { assert.equal(testOverride.rules[`sonarjs/${name}`], 'off', `${name} must be off in test files`); }
-    }
-    for (const name of testOn) { assert.ok(!baseOn.has(name) || both.includes(name)); }
-    // Opt-in groups: sizes, disjointness from the core and from each other, and existence in the plugin.
-    const sizes = { sonarjsAws: 17, sonarjsWeb: 28, sonarjsFrameworks: 16, sonarjsTestTooling: 14, sonarjsStyle: 25 };
-    const seen = new Map([...core].map(name => [name, 'sonarjs']));
-    for (const [group, size] of Object.entries(sizes)) {
-        const names = blockNames(sonarBlocks[group]);
-        assert.equal(names.size, size, group);
-        for (const name of names) {
-            assert.ok(pluginRules.has(name), `${group}: ${name} is not a rule of the installed plugin`);
-            assert.ok(!seen.has(name), `${name} is in both ${seen.get(name)} and ${group}`);
-            seen.set(name, group);
-        }
-    }
-    for (const name of core) { assert.ok(pluginRules.has(name), `core: ${name} is not a rule of the installed plugin`); }
-    // Dropped rules: covered duplicates, not-covered, silent typed-only, ast-grep. None overlaps an enabled rule or another list.
-    assert.equal(Object.keys(data.sonarjsCovered).length, 38 + 2 + 13, 'covered table: 38 duplicates + 2 enabled built-ins + 13 previously enabled regexp/native duplicates');
-    assert.equal(data.sonarjsAstGrep.length, 5);
-    assert.equal(data.sonarjsSilent.length, 27);
-    assert.deepEqual(Object.keys(data.sonarjsNotCovered).toSorted(), ['label-position', 'no-duplicate-test-title', 'no-empty-test-title', 'no-labels', 'no-redundant-boolean', 'synchronous-suite-callback']);
-    const dropped = new Map();
-    for (const [list, names] of Object.entries({ covered: Object.keys(data.sonarjsCovered), notCovered: Object.keys(data.sonarjsNotCovered), silent: data.sonarjsSilent, astGrep: data.sonarjsAstGrep })) {
-        for (const name of names) {
-            assert.ok(pluginRules.has(name), `${list}: ${name} is not a rule of the installed plugin`);
-            assert.ok(!seen.has(name), `${name} is both enabled (${seen.get(name)}) and dropped (${list})`);
-            assert.ok(!dropped.has(name), `${name} is in both ${dropped.get(name)} and ${list}`);
-            dropped.set(name, list);
-        }
-    }
-    // The 31 rules the first consumer had to add by hand are each accounted for.
-    for (const name of `assertions-in-test-cases async-test-assertions avoid-mutating-nested-properties-of-shallow-clones
-        explicit-test-skip hooks-before-test-cases memoize-cache-key no-debounce-throttle-in-render
-        no-debug-commands-in-ui-tests no-default-utility-imports no-duplicate-parameterized-test-case
-        no-duplicate-test-title no-empty-parameterized-test-dataset no-empty-test-title
-        no-fixed-wait-in-tests no-floating-point-equality no-forced-browser-interaction
-        no-interpolation-in-inline-snapshots no-mutate-reactive-state-in-updated-hook no-trivial-assertions
-        no-vue-class-component no-vue-mixins parameterized-tests prefer-cypress-should
-        prefer-native-axios-alternative prefer-native-jquery-alternative prefer-native-lodash-alternative
-        prefer-specific-assertions super-linear-regex testing-library-prefer-query-by-disappearance
-        testing-library-query-assertion vitest-mock-at-module-scope`.split(/\s+/u)) {
-        assert.ok(seen.has(name) || dropped.has(name), `${name} is silently missing`);
-    }
-    // Rules enabled by earlier versions of this package that are still enabled somewhere or documented as dropped.
-    for (const name of ['no-commented-code', 'unused-import', 'bitwise-operators', 'sql-queries', 'slow-regex', 'os-command', 'arguments-order', 'no-redundant-optional', 'concise-regex']) {
-        assert.ok(seen.has(name) || dropped.has(name), `${name} is silently missing`);
-    }
-    // Every "covered by" id must be a rule that is actually enabled by the default (or by bunTest, or an explicit compiler check).
-    const enabledByDefault = new Set([pkg.default.rules, ...pkg.default.overrides.map(override => override.rules ?? {})].flatMap(map => Object.entries(map).filter(([, value]) => isOn(value)).map(([key]) => key)));
-    assert.ok(!enabledByDefault.has('no-control-regex'), 'the stricter built-in is not enabled by default');
-    assert.ok(blockNames(pkg.sonarjsStyle).has('no-control-regex'), 'SonarJS control regex checking is opt-in style');
-    const enabledByBunTest = new Set(Object.keys(Object.assign({}, ...pkg.bunTest.overrides.map(override => override.rules))));
-    for (const [name, covers] of Object.entries(data.sonarjsCovered)) {
-        assert.ok(covers.length > 0, name);
-        for (const id of covers) {
-            if (id.startsWith('tsc:')) { continue; }
-            const set = id.startsWith('bunTest:') ? enabledByBunTest : enabledByDefault;
-            const rule = id.replace(/^bunTest:/u, '');
-            assert.ok(set.has(rule), `sonarjs/${name} is listed as covered by ${id}, which is not enabled`);
-        }
-    }
-    // Docs name every opt-in export and every dropped rule.
-    const readme = readFileSync(join(packageRoot, 'README.md'), 'utf8');
-    for (const name of [...Object.keys(sonarBlocks), 'root']) { assert.ok(readme.includes(`\`${name}\``), `README does not document ${name}`); }
-    for (const name of [...Object.keys(data.sonarjsCovered), ...Object.keys(data.sonarjsNotCovered), ...data.sonarjsAstGrep]) {
-        assert.ok(readme.includes(`sonarjs/${name}`), `README does not list dropped rule sonarjs/${name}`);
-    }
-}
-checkSonarContract();
 
 const installedPackage = '@hughescr/oxlint-config-default';
 /** Names a declaration file exports (`export const|function|let|var NAME`, `export default`, `export { a, b }`). */
@@ -419,9 +343,11 @@ export const asFlatConfig: Linter.Config[] = packageJson;
 /** Declaration/runtime parity: every runtime export of each entry point is declared (and nothing else), and package.json wires and packs the declarations. */
 async function checkDeclarationParity(installDir) {
     const manifest = JSON.parse(readFileSync(join(installDir, 'package.json'), 'utf8'));
-    const entries = [['.', 'index.mjs', 'index.d.mts'], ['./package-json', 'package-json.mjs', 'package-json.d.mts']];
+    const entries = [['.', 'index.mjs', 'index.d.mts'], ['./package-json', 'package-json.mjs', 'package-json.d.mts'], [null, 'rules.mjs', 'rules.d.mts']];
     for (const [subpath, runtimeFile, declarationFile] of entries) {
-        assert.deepEqual(manifest.exports[subpath], { types: `./${declarationFile}`, default: `./${runtimeFile}` }, `package.json exports["${subpath}"] must pair the runtime file with its declaration file (types condition first)`);
+        if (subpath !== null) {
+            assert.deepEqual(manifest.exports[subpath], { types: `./${declarationFile}`, default: `./${runtimeFile}` }, `package.json exports["${subpath}"] must pair the runtime file with its declaration file (types condition first)`);
+        }
         assert.ok(manifest.files.includes(declarationFile), `package.json files must list ${declarationFile}`);
         const declared = declaredExports(readFileSync(join(installDir, declarationFile), 'utf8'));
         const loaded = await import(pathToFileURL(join(installDir, runtimeFile)).href);
@@ -454,13 +380,10 @@ export default defineConfig({ ...root, extends: [config, lodash, bunTest], setti
 import { isAbsolute } from 'node:path';
 import config, * as all from '@hughescr/oxlint-config-default';
 assert.ok(Object.values(config.categories).every(level => level === 'off'));
-for (const name of ['sonarjs', 'sonarjsAws', 'sonarjsWeb', 'sonarjsFrameworks', 'sonarjsTestTooling', 'sonarjsStyle', 'lodash', 'bunTest', 'moduleBoundaries']) {
+for (const name of ['lodash', 'bunTest', 'moduleBoundaries']) {
     assert.ok(all[name].jsPlugins.every(plugin => isAbsolute(plugin.specifier)), name);
 }
 assert.ok(config.jsPlugins.every(plugin => isAbsolute(plugin.specifier)));
-for (const name of ['sonarjs/deprecation', 'sonarjs/void-use', 'sonarjs/no-ignored-return', 'sonarjs/class-name', 'sonarjs/cors']) {
-    assert.equal(config.rules[name], undefined, name);
-}
 for (const name of ['strict', 'n-js/no-unpublished-bin', 'n-js/process-exit-as-throw', 'eslint-core/no-restricted-syntax']) {
     assert.equal(config.rules[name], undefined);
 }
@@ -489,18 +412,62 @@ export async function floating() { Promise.resolve(again); }
 Promise.resolve(1).then(() => {});
 for (let i = 0; i < items.length; i++) { console.log(items[i]); }
 readFileSync('test');
-export const sameSides = (n: number) => n % 2 === n % 2;
-export const address = '8.8.8.8';
-export const random = Math.random();
 export function neverThrown() { new Error('not thrown'); }
 export const controlCharacter = /\\x00/;
 `);
     put('dep.ts', 'export const value = 1;\n');
-    // bun:test files: test-semantic sonarjs rules apply here; general defect/security rules do not, except the four shared ones.
-    put('trivial.test.ts', `import { it, expect } from 'bun:test';\nit('trivial', () => { expect(true).toBe(true); });\n`);
-    put('scoped.test.ts', `import { it, expect } from 'bun:test';
-import { createHash } from 'node:crypto';
-it('scoping', () => { const ip = '8.8.8.8'; const r = Math.random(); expect(createHash('md5').update(String(r)).digest('hex') + ip).toBeString(); });\n`);
+    // Real bun:test imports must trigger the assertion rule, including Bun's custom async matchers.
+    const invalidExpect = `import { it, expect } from 'bun:test';
+it('assertions', () => {
+    expect(1);
+    expect();
+    expect(1, 'message', 'extra').toBe(1);
+    expect(Promise.resolve(1)).resolves.toBe(1);
+    expect(Promise.reject(1)).rejects.toBe(1);
+    expect(async () => 1).toResolve();
+    expect(async () => { throw 1; }).toReject();
+});\n`;
+    const validExpect = `import { it, expect } from 'bun:test';
+it('assertions', async () => {
+    expect(1, 'message').toBe(1);
+    await expect(Promise.resolve(1)).resolves.toBe(1);
+    await expect(Promise.reject(1)).rejects.toBe(1);
+    await expect(async () => 1).toResolve();
+    await expect(async () => { throw 1; }).toReject();
+    return expect(Promise.resolve(1)).resolves.toBe(1);
+});\n`;
+    for (const extension of ['ts', 'js', 'tsx']) {
+        put(`expect-bad.test.${extension}`, invalidExpect);
+        put(`expect-good.test.${extension}`, validExpect);
+        const checked = lint([`expect-bad.test.${extension}`, `expect-good.test.${extension}`]);
+        const hits = checked.diagnostics.filter(diagnostic => diagnostic.code === 'jest-js(valid-expect)');
+        assert.equal(hits.length, 7, JSON.stringify(hits));
+        assert.ok(hits.every(diagnostic => diagnostic.filename === `expect-bad.test.${extension}`));
+    }
+    // --print-config must preserve every base option in TypeScript severity overrides (#3).
+    const resolvedRules = file => {
+        const printed = spawnSync('node', [cli, '-c', 'oxlint.config.ts', '--print-config', file], { cwd: consumer, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+        assert.ifError(printed.error);
+        assert.equal(printed.status, 0, printed.stdout + printed.stderr);
+        const normalized = JSON.parse(printed.stdout);
+        // --print-config retains override blocks; a positional filename does not select one.
+        // For these ordinary root-level source files the only rule-bearing override is the TS block.
+        if (file.endsWith('.ts')) {
+            const tsOverrides = normalized.overrides.filter(override => override.files.includes('**/*.ts'));
+            assert.equal(tsOverrides.length, 1, 'exactly one TypeScript rule override');
+            return { ...normalized.rules, ...tsOverrides[0].rules };
+        }
+        return normalized.rules;
+    };
+    const jsRules = resolvedRules('env.mjs');
+    const tsRules = resolvedRules('bad.ts');
+    assert.deepEqual(tsRules['no-shadow'], jsRules['no-shadow'], 'TypeScript must retain all base no-shadow options');
+    assert.equal(tsRules['no-shadow'][1].builtinGlobals, false);
+    for (const [id, value] of Object.entries(data.typescript)) {
+        if (typeof value === 'string' && value !== 'off' && Array.isArray(data.core[id])) {
+            assert.deepEqual(tsRules[id].slice(1), jsRules[id].slice(1), `${id}: severity override resets base options`);
+        }
+    }
     put('env.mjs', 'export const cwd = process.cwd();\n');
     put('bad.mjs', `export let counter = 0;
 export async function increment() { counter += await Promise.resolve(1); }
@@ -514,14 +481,9 @@ beforeAll(() => {});\n`);
     put('index.ts', `export { privateValue } from './internal.ts';\n`);
     put('internal.ts', '/** @internal */\nexport const privateValue = 1;\n');
     put('lodash.ts', `import _ from 'lodash';\nexport const alias = _.first([1, 2]);\n`);
-    const result = lint(['bad.ts', 'bad.mjs', 'bad.test.ts', 'index.ts', 'lodash.ts', 'trivial.test.ts', 'scoped.test.ts', 'env.mjs']);
+    const result = lint(['bad.ts', 'bad.mjs', 'bad.test.ts', 'index.ts', 'lodash.ts', 'env.mjs']);
     const codesIn = file => result.diagnostics.filter(diagnostic => diagnostic.filename.endsWith(file)).map(diagnostic => diagnostic.code);
-    assert.ok(codesIn('trivial.test.ts').includes('sonarjs(no-trivial-assertions)'), 'test-semantic sonarjs rule fires on test files');
-    assert.ok(codesIn('scoped.test.ts').includes('sonarjs(hashing)'), 'the four shared sonarjs rules also run on test files');
-    for (const code of ['sonarjs(no-hardcoded-ip)', 'sonarjs(pseudo-random)']) { assert.ok(!codesIn('scoped.test.ts').includes(code), `${code} must not run on test files`); }
-    assert.ok(!codesIn('bad.ts').includes('sonarjs(no-trivial-assertions)'), 'test-semantic sonarjs rules do not run on non-test files');
     assert.ok(!codesIn('bad.ts').includes('eslint(no-control-regex)'), 'intentional control-character regexes are allowed by default');
-    assert.ok(!codesIn('bad.ts').includes('sonarjs(no-control-regex)'), 'SonarJS control regex checking is opt-in');
     // `process` in a .mjs file: env reaches the config through the default's override, with no consumer env copy.
     assert.ok(!codesIn('env.mjs').includes('eslint(no-undef)'), 'node globals must not be reported as undefined');
     for(const code of [
@@ -530,7 +492,6 @@ beforeAll(() => {});\n`);
         'unicorn(no-process-exit)', 'unicorn-js(no-for-loop)',
         'import(no-duplicates)', 'import-x-js(order)', 'node(no-sync)', 'n-js(no-process-exit)',
         'promise(always-return)', 'eslint-core(require-atomic-updates)', 'eslint(no-new)', 'oxc(missing-throw)',
-        'sonarjs(no-identical-expressions)', 'sonarjs(no-hardcoded-ip)', 'sonarjs(pseudo-random)',
         'regexp(no-dupe-characters-character-class)', '@stylistic(quotes)',
         '@hughescr/test-hygiene(require-fake-timers-cleanup)', '@hughescr/module-boundaries(no-internal-in-barrel)',
         'lodash(preferred-alias)', 'lodash-es(suggest-native-alternatives)', 'jest-js(no-focused-tests)',
@@ -575,25 +536,6 @@ export default { categories: { correctness: 'off' }, extends: [moduleBoundaries]
 '@hughescr/module-boundaries/no-cross-module-internal': ['error', { modules: [
 { type: 'a', pattern: 'a/**' }, { type: 'b', pattern: 'b/**' }] }] } };\n`);
     has(lint(['b/use.ts']), '@hughescr/module-boundaries(no-cross-module-internal)');
-    put('oxlint.config.ts', `import { sonarjs } from '@hughescr/oxlint-config-default';
-export default { categories: { correctness: 'off' }, extends: [sonarjs] };\n`);
-    has(lint(['bad.ts']), 'sonarjs(no-identical-expressions)');
-    // Opt-in groups load through the same wrapper and fire on their own domains; none is part of the default.
-    const optIns = [
-        ['sonarjsAws', 'aws.ts', "import { aws_s3 as s3 } from 'aws-cdk-lib';\ndeclare const scope: any;\nnew s3.Bucket(scope, 'b', { publicReadAccess: true });\n", 'sonarjs(aws-s3-bucket-versioning)'],
-        ['sonarjsWeb', 'web.ts', "import { exec } from 'node:child_process';\nexport function run(arg: string) { exec(`ls ${arg}`); }\n", 'sonarjs(os-command)'],
-        ['sonarjsFrameworks', 'frameworks.jsx', 'export const grid = () => <table><tr><td>1</td></tr></table>;\n', 'sonarjs(table-header)'],
-        ['sonarjsTestTooling', 'cypress.test.js', "describe('x', function () { it('y', function () { cy.get('x').debug(); cy.wait(500); }); });\n", 'sonarjs(no-fixed-wait-in-tests)'],
-        ['sonarjsStyle', 'style.ts', 'export function f(x: number) { const y = x * 2; return y; }\n', 'sonarjs(prefer-immediate-return)'],
-        ['sonarjsStyle', 'control.ts', 'export const control = /\\x01/;\n', 'sonarjs(no-control-regex)'],
-    ];
-    for (const [name, file, text, code] of optIns) {
-        put(file, text);
-        put('oxlint.config.ts', `import { ${name} } from '@hughescr/oxlint-config-default';\nexport default { categories: { correctness: 'off' }, extends: [${name}] };\n`);
-        has(lint([file]), code);
-        put('oxlint.config.ts', `import config from '@hughescr/oxlint-config-default';\nexport default { extends: [config] };\n`);
-        assert.ok(!lint([file]).diagnostics.some(diagnostic => diagnostic.code === code), `${code} must not be in the default`);
-    }
     // A narrow imported override distinguishes consumer-relative matching from matching
     // against the module directory (broad **/*.ts globs alone cannot prove the anchor).
     put('node_modules/shared-override-probe/package.json', '{"type":"module","exports":"./index.mjs"}');
@@ -641,20 +583,6 @@ export default {
     assert.deepEqual(applied.diagnostics.filter(diagnostic => diagnostic.code === 'eslint(no-undef)'), []);
     assert.ok(!applied.diagnostics.some(diagnostic => diagnostic.filename.endsWith('ignored/b.mjs')));
     assert.ok(applied.diagnostics.some(diagnostic => diagnostic.message === 'settings={"probeSetting":1}'));
-    // Reliability: Oxlint 1.94 hands every file one shared `sourceCode`, and the stock sonarjs plugin caches
-    // "which test framework is imported" per sourceCode identity, so a non-test file sorted first silences the
-    // test-gated rules for the whole run (nondeterministically with threads). The wrapper clears the caches per
-    // file; the test-gated rule must fire on every one of several default-thread runs.
-    // The non-test files must exercise import-dependent rules (hashing, no-os-command-from-path) so the stock
-    // plugin's cache is populated from a file without bun:test; with 19 such files around one test file the
-    // stock plugin failed 12 of 12 runs when measured, so six runs are ample.
-    for (const prefix of ['aaa', 'bbb', 'ccc', 'mmm', 'xxx', 'yyy', 'zzz']) {
-        for (const index of [1, 2, 3]) {
-            if (prefix === 'mmm' && index > 1) { continue; }
-            put(`repeat/${prefix}-${index}.ts`, `import { createHash } from 'node:crypto';\nimport { execSync } from 'node:child_process';\nexport const hash${index} = createHash('sha256');\nexport const out${index} = execSync('ls');\n`);
-        }
-    }
-    put('repeat/mid.test.ts', `import { it, expect } from 'bun:test';\nit('trivial', () => { expect(true).toBe(true); });\n`);
     // Optional `boundaries` add-on: two layers, one forbidden import (fires) and one allowed import (clean).
     // Elements resolve against the working directory (the consumer root), exactly like a real project.
     assert.ok(pkg.boundaries && typeof pkg.defineBoundaries === 'function', 'boundaries and defineBoundaries must be exported');
@@ -682,15 +610,10 @@ const architecture = defineBoundaries({
     dependencies: { default: 'disallow', policies: [{ from: { element: { type: 'high' } }, allow: { to: { element: { type: ['low'] } } } }] },
     files: ['layers/**/*.ts'],
 });\n`;
-    // The boundaries add-on runs in the same repeated multi-file run as the sonarjs wrapper.
-    put('oxlint.config.ts', `import { sonarjs } from '@hughescr/oxlint-config-default';
-${architectureSource}export default { categories: { correctness: 'off' }, extends: [sonarjs, architecture], settings: { ...architecture.settings } };\n`);
-    for (let run = 1; run <= 6; run++) {
-        const repeated = lint(['repeat', 'layers']);
-        assert.ok(repeated.diagnostics.some(diagnostic => diagnostic.code === 'sonarjs(no-trivial-assertions)' && diagnostic.filename.endsWith('mid.test.ts')), `run ${run}: test-gated sonarjs rule went silent`);
-        const boundaryHits = repeated.diagnostics.filter(diagnostic => diagnostic.code === 'boundaries(dependencies)');
-        assert.deepEqual(boundaryHits.map(diagnostic => diagnostic.filename), ['layers/low/c.ts'], `run ${run}: only the forbidden import may fire boundaries(dependencies)\n${repeated.stdout}${repeated.stderr}`);
-    }
+    put('oxlint.config.ts', `${architectureSource}export default { categories: { correctness: 'off' }, extends: [architecture], settings: { ...architecture.settings } };\n`);
+    const layered = lint(['layers']);
+    const boundaryHits = layered.diagnostics.filter(diagnostic => diagnostic.code === 'boundaries(dependencies)');
+    assert.deepEqual(boundaryHits.map(diagnostic => diagnostic.filename), ['layers/low/c.ts'], `only the forbidden import may fire boundaries(dependencies)\n${layered.stdout}${layered.stderr}`);
     // Settings do not inherit through `extends`, so omitting the root merge silences the rule (the README documents this).
     put('oxlint.config.ts', `${architectureSource}export default { categories: { correctness: 'off' }, extends: [architecture] };\n`);
     assert.ok(!lint(['layers']).diagnostics.some(diagnostic => diagnostic.code === 'boundaries(dependencies)'), 'without the root settings merge the rule has no elements to classify with');
@@ -834,6 +757,41 @@ ${architectureSource}export default { categories: { correctness: 'off' }, extend
             assert.ok(!silentFiles.has(match.file), `${match.ruleId} must stay silent at ${match.file}`);
             assert.ok(flaggedFiles.has(match.file), `${match.ruleId} matched unexpected file ${match.file}`);
         }
+        // New ports and literal security tripwires use checked-in fixtures and a real installed ruleDir.
+        const literalIds = ['sonar-publicly-writable-directories', 'sonar-no-internal-api-use', 'security-no-reject-unauthorized-false', 'security-no-weak-hash-literal', 'security-no-weak-cipher-literal', 'security-no-weak-tls-literal'];
+        const expectedFiles = new Map();
+        put('literal-scan/sgconfig.yml', 'ruleDirs:\n  - ../node_modules/@hughescr/oxlint-config-default/ast-grep\n');
+        for (const id of literalIds) {
+            const fixtureDir = join(root, 'test/fixtures/ast-grep', id);
+            const expected = JSON.parse(readFileSync(join(fixtureDir, 'expected.json'), 'utf8'));
+            for (const [extension, suffix] of variants) {
+                const fixtureExtension = ['mts', 'cts'].includes(extension) ? 'ts' : ['mjs', 'cjs', 'jsx'].includes(extension) ? 'js' : extension;
+                for (const sample of ['bad', 'good']) {
+                    const text = readFileSync(join(fixtureDir, `${sample}.${fixtureExtension}`), 'utf8');
+                    for (const location of [...sourceLocations(`${id}-${sample}`, extension), ...testLocations(`${id}-${sample}`, extension)]) {
+                        put(`literal-scan/${location}`, text);
+                        const inTest = testLocations(`${id}-${sample}`, extension).includes(location);
+                        const lines = sample === 'bad' && (!inTest || id === 'sonar-no-internal-api-use') ? expected[`bad.${fixtureExtension}`] : [];
+                        expectedFiles.set(location, { ruleId: `${id}${suffix}`, lines });
+                    }
+                }
+            }
+        }
+        const literalScan = spawnSync('ast-grep', ['scan', '--json=compact'], { cwd: join(consumer, 'literal-scan'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+        assert.ifError(literalScan.error);
+        assert.equal(literalScan.status, 1, literalScan.stderr);
+        const literalMatches = JSON.parse(literalScan.stdout).filter(match => literalIds.includes(match.ruleId.replace(/-(?:javascript|tsx)$/u, '')));
+        for (const [location, expected] of expectedFiles) {
+            const hits = literalMatches.filter(match => match.file === location);
+            assert.ok(hits.every(match => match.ruleId === expected.ruleId && match.severity === 'error'), `${location}: variant/severity`);
+            assert.deepEqual(hits.map(match => match.range.start.line + 1).toSorted((a, b) => a - b), expected.lines, `${expected.ruleId} at ${location}`);
+        }
+        assert.ok(literalMatches.every(match => expectedFiles.has(match.file)), 'unexpected literal-rule match');
+        for (const rejected of ['sonar-non-existent-operator', 'security-no-cleartext-url-literal']) {
+            assert.ok(!existsSync(join(packageRoot, 'ast-grep', `${rejected}.yml`)), `${rejected} must not ship`);
+            assert.ok(!existsSync(join(root, 'test/fixtures/ast-grep', rejected)), `${rejected} fixtures must be removed`);
+        }
+        console.log('ast-grep literal fixture checks passed (all extensions; exact lines, clean files and test scoping).');
         // The README names every shipped ast-grep rule file.
         const astGrepReadme = readFileSync(join(packageRoot, 'README.md'), 'utf8');
         for (const file of readdirSync(join(packageRoot, 'ast-grep')).filter(name => name.endsWith('.yml'))) {

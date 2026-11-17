@@ -11,5 +11,5 @@
         "outDir": ".",
         "skipLibCheck": true
     },
-    "files": ["index.mjs", "package-json.mjs"]
+    "files": ["index.mjs", "package-json.mjs", "rules.mjs"]
 }

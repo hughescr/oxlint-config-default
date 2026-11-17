@@ -1,0 +1,237 @@
+id: security-no-weak-tls-literal
+language: typescript
+severity: error
+message: "Obsolete TLS setting written literally. Use minVersion: 'TLSv1.2' (or 'TLSv1.3') and drop secureProtocol. Suppress a necessary legacy peer with `// ast-grep-ignore: security-no-weak-tls-literal -- reason`."
+note: |
+  Tripwire for obsolete TLS options: secureProtocol naming SSLv2, SSLv3, TLSv1 or TLSv1_1 (bare or methods),
+  or minVersion/maxVersion set to TLSv1 or TLSv1.1. Reports the object property, not type declarations.
+  Includes quoted and computed literal keys, no-substitution templates, parentheses and TypeScript
+  assertions. Only transparent wrappers are traversed: never calls, conditionals, or type nodes.
+  Indirect values/keys (constants, aliases, spreads, template substitutions) and assignments are not covered.
+  Non-test source files only. Replaces the literal part of sonarjs/weak-ssl.
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+      - kind: type_assertion
+  protocol-literal:
+    any:
+      - kind: string
+        regex: '^[''"](SSLv[23]|TLSv1(_1)?)((_(client|server))?_method)?[''"]$'
+      - kind: template_string
+        regex: '^`(SSLv[23]|TLSv1(_1)?)((_(client|server))?_method)?`$'
+  version-literal:
+    any:
+      - kind: string
+        regex: '^[''"]TLSv1(\.1)?[''"]$'
+      - kind: template_string
+        regex: '^`TLSv1(\.1)?`$'
+  protocol-key:
+    any:
+      - regex: '^[''"]?secureProtocol[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"]secureProtocol[''"]$'
+            - kind: template_string
+              regex: '^`secureProtocol`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  version-key:
+    any:
+      - regex: '^[''"]?(minVersion|maxVersion)[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"](minVersion|maxVersion)[''"]$'
+            - kind: template_string
+              regex: '^`(minVersion|maxVersion)`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  protocol-value:
+    any:
+      - matches: protocol-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: protocol-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+  version-value:
+    any:
+      - matches: version-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: version-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+rule:
+  kind: pair
+  any:
+    - all:
+        - has: { field: key, matches: protocol-key }
+        - has: { field: value, matches: protocol-value }
+    - all:
+        - has: { field: key, matches: version-key }
+        - has: { field: value, matches: version-value }
+---
+id: security-no-weak-tls-literal-javascript
+language: javascript
+severity: error
+message: "Obsolete TLS setting written literally. Use minVersion: 'TLSv1.2' (or 'TLSv1.3') and drop secureProtocol. Suppress a necessary legacy peer with `// ast-grep-ignore: security-no-weak-tls-literal-javascript -- reason`."
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-wrapper:
+    kind: parenthesized_expression
+  protocol-literal:
+    any:
+      - kind: string
+        regex: '^[''"](SSLv[23]|TLSv1(_1)?)((_(client|server))?_method)?[''"]$'
+      - kind: template_string
+        regex: '^`(SSLv[23]|TLSv1(_1)?)((_(client|server))?_method)?`$'
+  version-literal:
+    any:
+      - kind: string
+        regex: '^[''"]TLSv1(\.1)?[''"]$'
+      - kind: template_string
+        regex: '^`TLSv1(\.1)?`$'
+  protocol-key:
+    any:
+      - regex: '^[''"]?secureProtocol[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"]secureProtocol[''"]$'
+            - kind: template_string
+              regex: '^`secureProtocol`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  version-key:
+    any:
+      - regex: '^[''"]?(minVersion|maxVersion)[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"](minVersion|maxVersion)[''"]$'
+            - kind: template_string
+              regex: '^`(minVersion|maxVersion)`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  protocol-value:
+    any:
+      - matches: protocol-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: protocol-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+  version-value:
+    any:
+      - matches: version-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: version-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+rule:
+  kind: pair
+  any:
+    - all:
+        - has: { field: key, matches: protocol-key }
+        - has: { field: value, matches: protocol-value }
+    - all:
+        - has: { field: key, matches: version-key }
+        - has: { field: value, matches: version-value }
+---
+id: security-no-weak-tls-literal-tsx
+language: tsx
+severity: error
+message: "Obsolete TLS setting written literally. Use minVersion: 'TLSv1.2' (or 'TLSv1.3') and drop secureProtocol. Suppress a necessary legacy peer with `// ast-grep-ignore: security-no-weak-tls-literal-tsx -- reason`."
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  transparent-wrapper:
+    any:
+      - kind: parenthesized_expression
+      - kind: as_expression
+      - kind: satisfies_expression
+      - kind: non_null_expression
+  protocol-literal:
+    any:
+      - kind: string
+        regex: '^[''"](SSLv[23]|TLSv1(_1)?)((_(client|server))?_method)?[''"]$'
+      - kind: template_string
+        regex: '^`(SSLv[23]|TLSv1(_1)?)((_(client|server))?_method)?`$'
+  version-literal:
+    any:
+      - kind: string
+        regex: '^[''"]TLSv1(\.1)?[''"]$'
+      - kind: template_string
+        regex: '^`TLSv1(\.1)?`$'
+  protocol-key:
+    any:
+      - regex: '^[''"]?secureProtocol[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"]secureProtocol[''"]$'
+            - kind: template_string
+              regex: '^`secureProtocol`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  version-key:
+    any:
+      - regex: '^[''"]?(minVersion|maxVersion)[''"]?$'
+      - kind: computed_property_name
+        has:
+          any:
+            - kind: string
+              regex: '^[''"](minVersion|maxVersion)[''"]$'
+            - kind: template_string
+              regex: '^`(minVersion|maxVersion)`$'
+          stopBy:
+            not: { matches: transparent-wrapper }
+  protocol-value:
+    any:
+      - matches: protocol-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: protocol-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+  version-value:
+    any:
+      - matches: version-literal
+      - all:
+          - matches: transparent-wrapper
+          - has:
+              matches: version-literal
+              stopBy:
+                not: { matches: transparent-wrapper }
+rule:
+  kind: pair
+  any:
+    - all:
+        - has: { field: key, matches: protocol-key }
+        - has: { field: value, matches: protocol-value }
+    - all:
+        - has: { field: key, matches: version-key }
+        - has: { field: value, matches: version-value }

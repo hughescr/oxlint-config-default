@@ -1,0 +1,170 @@
+id: security-no-weak-cipher-literal
+language: typescript
+severity: error
+message: "Weak cipher family or ECB mode in a literal algorithm name. Use a modern authenticated cipher such as AES-GCM. Suppress a justified case with // ast-grep-ignore: security-no-weak-cipher-literal -- reason"
+note: |
+  Literal-only tripwire for sonarjs/no-weak-cipher and the ECB subset of
+  sonarjs/encryption-secure-mode, not semantic equivalence. DES (including
+  DES-EDE/DES3/3DES), RC2, RC4 and Blowfish prefixes are weak in any mode;
+  otherwise CBC and GCM are not banned. Matches createCipheriv, createDecipheriv,
+  createCipher and createDecipher by name (plain, member, optional-chain and
+  bracket-literal calls) when the first argument is a string or template
+  literal, optionally wrapped in parentheses, casts or non-null assertions.
+  No import/scope resolution; no aliases, constants, concatenation, argument
+  spreads or escape-sequence decoding. Non-test source files only.
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    any:
+      - kind: identifier
+        regex: '^create(Cipheriv|Decipheriv|Cipher|Decipher)$'
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^create(Cipheriv|Decipheriv|Cipher|Decipher)$'
+      - kind: subscript_expression
+        has:
+          field: index
+          regex: '^["''`]create(Cipheriv|Decipheriv|Cipher|Decipher)["''`]$'
+  all:
+    - has:
+        field: arguments
+        has:
+          nthChild:
+            position: 1
+            ofRule:
+              not:
+                kind: comment
+          any:
+            - any:
+                - kind: string
+                - kind: template_string
+              regex: '(?i)^["''`](des|3des|rc2|rc4|bf|blowfish|[^"''`]*-ecb)'
+            - all:
+                - any:
+                    - kind: parenthesized_expression
+                    - kind: as_expression
+                    - kind: satisfies_expression
+                    - kind: non_null_expression
+                    - kind: type_assertion
+                - has:
+                    stopBy:
+                      not:
+                        any:
+                          - kind: parenthesized_expression
+                          - kind: as_expression
+                          - kind: satisfies_expression
+                          - kind: non_null_expression
+                          - kind: type_assertion
+                    any:
+                      - kind: string
+                      - kind: template_string
+                    regex: '(?i)^["''`](des|3des|rc2|rc4|bf|blowfish|[^"''`]*-ecb)'
+---
+id: security-no-weak-cipher-literal-javascript
+language: javascript
+severity: error
+message: "Weak cipher family or ECB mode in a literal algorithm name. Use a modern authenticated cipher such as AES-GCM. Suppress a justified case with // ast-grep-ignore: security-no-weak-cipher-literal-javascript -- reason"
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    any:
+      - kind: identifier
+        regex: '^create(Cipheriv|Decipheriv|Cipher|Decipher)$'
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^create(Cipheriv|Decipheriv|Cipher|Decipher)$'
+      - kind: subscript_expression
+        has:
+          field: index
+          regex: '^["''`]create(Cipheriv|Decipheriv|Cipher|Decipher)["''`]$'
+  all:
+    - has:
+        field: arguments
+        has:
+          nthChild:
+            position: 1
+            ofRule:
+              not:
+                kind: comment
+          any:
+            - any:
+                - kind: string
+                - kind: template_string
+              regex: '(?i)^["''`](des|3des|rc2|rc4|bf|blowfish|[^"''`]*-ecb)'
+            - all:
+                - any:
+                    - kind: parenthesized_expression
+                - has:
+                    stopBy:
+                      not:
+                        any:
+                          - kind: parenthesized_expression
+                    any:
+                      - kind: string
+                      - kind: template_string
+                    regex: '(?i)^["''`](des|3des|rc2|rc4|bf|blowfish|[^"''`]*-ecb)'
+---
+id: security-no-weak-cipher-literal-tsx
+language: tsx
+severity: error
+message: "Weak cipher family or ECB mode in a literal algorithm name. Use a modern authenticated cipher such as AES-GCM. Suppress a justified case with // ast-grep-ignore: security-no-weak-cipher-literal-tsx -- reason"
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+rule:
+  kind: call_expression
+  has:
+    field: function
+    any:
+      - kind: identifier
+        regex: '^create(Cipheriv|Decipheriv|Cipher|Decipher)$'
+      - kind: member_expression
+        has:
+          field: property
+          regex: '^create(Cipheriv|Decipheriv|Cipher|Decipher)$'
+      - kind: subscript_expression
+        has:
+          field: index
+          regex: '^["''`]create(Cipheriv|Decipheriv|Cipher|Decipher)["''`]$'
+  all:
+    - has:
+        field: arguments
+        has:
+          nthChild:
+            position: 1
+            ofRule:
+              not:
+                kind: comment
+          any:
+            - any:
+                - kind: string
+                - kind: template_string
+              regex: '(?i)^["''`](des|3des|rc2|rc4|bf|blowfish|[^"''`]*-ecb)'
+            - all:
+                - any:
+                    - kind: parenthesized_expression
+                    - kind: as_expression
+                    - kind: satisfies_expression
+                    - kind: non_null_expression
+                - has:
+                    stopBy:
+                      not:
+                        any:
+                          - kind: parenthesized_expression
+                          - kind: as_expression
+                          - kind: satisfies_expression
+                          - kind: non_null_expression
+                    any:
+                      - kind: string
+                      - kind: template_string
+                    regex: '(?i)^["''`](des|3des|rc2|rc4|bf|blowfish|[^"''`]*-ecb)'

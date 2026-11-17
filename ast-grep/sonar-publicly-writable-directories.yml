@@ -1,0 +1,220 @@
+id: sonar-publicly-writable-directories
+language: typescript
+severity: error
+message: 'Publicly writable temp paths and environment variables need a safety review. Use a securely created private directory, or suppress a justified case with // ast-grep-ignore: sonar-publicly-writable-directories -- reason.'
+note: |
+  Syntax-only port of sonarjs/publicly-writable-directories (S5443), for non-test files.
+  Matches raw quoted strings and template literals using the upstream case-insensitive
+  Unix prefix list (including the trailing slash) and Windows Temp/TMP forms, plus direct
+  reads of process.env.TMPDIR/TMP/TEMPDIR/TEMP (dot or bracket access, optional chains,
+  parentheses, `as`/`satisfies`/`!`/`<T>` wrappers around process or process.env).
+  No escape decoding, aliases, destructuring or computed names. JavaScript and TSX
+  suppressions must name their respective variant ids.
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  process-ref:
+    any:
+      - kind: identifier
+        regex: '^process$'
+      - any:
+          - kind: parenthesized_expression
+          - kind: as_expression
+          - kind: satisfies_expression
+          - kind: non_null_expression
+          - kind: type_assertion
+        has:
+          matches: process-ref
+  env-ref:
+    any:
+      - kind: member_expression
+        all:
+          - has:
+              field: property
+              regex: '^env$'
+          - has:
+              field: object
+              matches: process-ref
+      - kind: subscript_expression
+        all:
+          - has:
+              field: index
+              regex: '^["''`]env["''`]$'
+          - has:
+              field: object
+              matches: process-ref
+      - any:
+          - kind: parenthesized_expression
+          - kind: as_expression
+          - kind: satisfies_expression
+          - kind: non_null_expression
+          - kind: type_assertion
+        has:
+          matches: env-ref
+rule:
+  any:
+    - all:
+        - any:
+            - kind: string
+            - kind: template_string
+        - regex: '(?i)^["''`]/(?:tmp|var/tmp|usr/tmp|dev/shm|dev/mqueue|run/lock|var/run/lock|library/caches|users/shared|private/tmp|private/var/tmp)/'
+    - all:
+        - any:
+            - kind: string
+            - kind: template_string
+        - regex: '(?i)^["''`][^\\]*(?:\\){1,2}(?:Windows(?:\\){1,2}Temp|Temp|TMP)(?:\\.*|["''`]$)'
+    - kind: member_expression
+      all:
+        - has:
+            field: property
+            regex: '^(TMPDIR|TMP|TEMPDIR|TEMP)$'
+        - has:
+            field: object
+            matches: env-ref
+    - kind: subscript_expression
+      all:
+        - has:
+            field: index
+            regex: '^["''`](TMPDIR|TMP|TEMPDIR|TEMP)["''`]$'
+        - has:
+            field: object
+            matches: env-ref
+---
+id: sonar-publicly-writable-directories-javascript
+language: javascript
+severity: error
+message: 'Publicly writable temp paths and environment variables need a safety review. Use a securely created private directory, or suppress a justified case with // ast-grep-ignore: sonar-publicly-writable-directories-javascript -- reason.'
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  process-ref:
+    any:
+      - kind: identifier
+        regex: '^process$'
+      - kind: parenthesized_expression
+        has:
+          matches: process-ref
+  env-ref:
+    any:
+      - kind: member_expression
+        all:
+          - has:
+              field: property
+              regex: '^env$'
+          - has:
+              field: object
+              matches: process-ref
+      - kind: subscript_expression
+        all:
+          - has:
+              field: index
+              regex: '^["''`]env["''`]$'
+          - has:
+              field: object
+              matches: process-ref
+      - kind: parenthesized_expression
+        has:
+          matches: env-ref
+rule:
+  any:
+    - all:
+        - any:
+            - kind: string
+            - kind: template_string
+        - regex: '(?i)^["''`]/(?:tmp|var/tmp|usr/tmp|dev/shm|dev/mqueue|run/lock|var/run/lock|library/caches|users/shared|private/tmp|private/var/tmp)/'
+    - all:
+        - any:
+            - kind: string
+            - kind: template_string
+        - regex: '(?i)^["''`][^\\]*(?:\\){1,2}(?:Windows(?:\\){1,2}Temp|Temp|TMP)(?:\\.*|["''`]$)'
+    - kind: member_expression
+      all:
+        - has:
+            field: property
+            regex: '^(TMPDIR|TMP|TEMPDIR|TEMP)$'
+        - has:
+            field: object
+            matches: env-ref
+    - kind: subscript_expression
+      all:
+        - has:
+            field: index
+            regex: '^["''`](TMPDIR|TMP|TEMPDIR|TEMP)["''`]$'
+        - has:
+            field: object
+            matches: env-ref
+---
+id: sonar-publicly-writable-directories-tsx
+language: tsx
+severity: error
+message: 'Publicly writable temp paths and environment variables need a safety review. Use a securely created private directory, or suppress a justified case with // ast-grep-ignore: sonar-publicly-writable-directories-tsx -- reason.'
+ignores:
+  - '**/{tests,test,__tests__}/**'
+  - '**/*.{test,spec}.*'
+utils:
+  process-ref:
+    any:
+      - kind: identifier
+        regex: '^process$'
+      - any:
+          - kind: parenthesized_expression
+          - kind: as_expression
+          - kind: satisfies_expression
+          - kind: non_null_expression
+        has:
+          matches: process-ref
+  env-ref:
+    any:
+      - kind: member_expression
+        all:
+          - has:
+              field: property
+              regex: '^env$'
+          - has:
+              field: object
+              matches: process-ref
+      - kind: subscript_expression
+        all:
+          - has:
+              field: index
+              regex: '^["''`]env["''`]$'
+          - has:
+              field: object
+              matches: process-ref
+      - any:
+          - kind: parenthesized_expression
+          - kind: as_expression
+          - kind: satisfies_expression
+          - kind: non_null_expression
+        has:
+          matches: env-ref
+rule:
+  any:
+    - all:
+        - any:
+            - kind: string
+            - kind: template_string
+        - regex: '(?i)^["''`]/(?:tmp|var/tmp|usr/tmp|dev/shm|dev/mqueue|run/lock|var/run/lock|library/caches|users/shared|private/tmp|private/var/tmp)/'
+    - all:
+        - any:
+            - kind: string
+            - kind: template_string
+        - regex: '(?i)^["''`][^\\]*(?:\\){1,2}(?:Windows(?:\\){1,2}Temp|Temp|TMP)(?:\\.*|["''`]$)'
+    - kind: member_expression
+      all:
+        - has:
+            field: property
+            regex: '^(TMPDIR|TMP|TEMPDIR|TEMP)$'
+        - has:
+            field: object
+            matches: env-ref
+    - kind: subscript_expression
+      all:
+        - has:
+            field: index
+            regex: '^["''`](TMPDIR|TMP|TEMPDIR|TEMP)["''`]$'
+        - has:
+            field: object
+            matches: env-ref
